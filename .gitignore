@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+legal_mvp.db
+storage/uploads/*
+!storage/uploads/.gitkeep

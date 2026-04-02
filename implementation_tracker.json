@@ -1,0 +1,444 @@
+{
+  "project": "Nigeria Legal Marketplace MVP",
+  "last_updated": "2026-04-02",
+  "phases": [
+    {
+      "id": "phase-1",
+      "name": "Core MVP API",
+      "status": "in-progress",
+      "features": [
+        {
+          "id": "feat-001",
+          "name": "Problem-first intake endpoint",
+          "status": "completed",
+          "notes": "POST /api/intake/match implemented with category inference"
+        },
+        {
+          "id": "feat-002",
+          "name": "Balanced ranking engine",
+          "status": "completed",
+          "notes": "Weighted scoring + explainable reasons"
+        },
+        {
+          "id": "feat-003",
+          "name": "Adaptive exposure and new-lawyer rotation",
+          "status": "completed",
+          "notes": "Exposure bands 25/20/15/10 with eligibility gates"
+        },
+        {
+          "id": "feat-004",
+          "name": "Lawyer profile endpoint",
+          "status": "completed",
+          "notes": "GET /api/lawyers/{lawyer_id}"
+        },
+        {
+          "id": "feat-005",
+          "name": "Complaint/tier trigger workflows",
+          "status": "completed",
+          "notes": "Complaint filing and resolution triggers implemented"
+        },
+        {
+          "id": "feat-006",
+          "name": "Audit event logging",
+          "status": "completed",
+          "notes": "Sensitive actions now write to audit_events and admin feed"
+        },
+        {
+          "id": "feat-007",
+          "name": "In-app notifications",
+          "status": "completed",
+          "notes": "Notification creation, listing, and read state endpoint delivered"
+        },
+        {
+          "id": "feat-008",
+          "name": "Paystack-style payment simulation",
+          "status": "completed",
+          "notes": "Initialize + verify simulation flow with references and gateway statuses"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "task-001",
+          "title": "Core API scaffolding",
+          "status": "completed",
+          "owner": "copilot",
+          "updated_on": "2026-04-02"
+        },
+        {
+          "id": "task-002",
+          "title": "Add seed data and models",
+          "status": "completed",
+          "owner": "copilot",
+          "updated_on": "2026-04-02"
+        },
+        {
+          "id": "task-003",
+          "title": "Tests for ranking and API",
+          "status": "completed",
+          "owner": "copilot",
+          "updated_on": "2026-04-02"
+        },
+        {
+          "id": "task-004",
+          "title": "Persistence layer",
+          "status": "completed",
+          "owner": "unassigned",
+          "updated_on": "2026-04-02",
+          "notes": "SQLite persistence implemented"
+        },
+        {
+          "id": "task-005",
+          "title": "Implement complaint trigger matrix",
+          "status": "completed",
+          "owner": "copilot",
+          "updated_on": "2026-04-02",
+          "notes": "Complaint trigger workflows implemented"
+        },
+        {
+          "id": "task-006",
+          "title": "Implement auth and KYC endpoints",
+          "status": "completed",
+          "owner": "copilot",
+          "updated_on": "2026-04-02",
+          "notes": "Auth, role guards, and KYC endpoints delivered"
+        },
+        {
+          "id": "task-007",
+          "title": "Implement token expiry and refresh rotation",
+          "status": "completed",
+          "owner": "copilot",
+          "updated_on": "2026-04-02",
+          "notes": "Access/refresh expiry, rotation, and logout revocation implemented"
+        },
+        {
+          "id": "task-008",
+          "title": "Implement messaging, consultations, and payment simulation",
+          "status": "completed",
+          "owner": "copilot",
+          "updated_on": "2026-04-02",
+          "notes": "Chat, booking workflow, and simulated payment lifecycle delivered"
+        },
+        {
+          "id": "task-009",
+          "title": "Implement secure consultation document handling",
+          "status": "completed",
+          "owner": "copilot",
+          "updated_on": "2026-04-02",
+          "notes": "Authorized upload, list, and download flows added for consultation documents"
+        },
+        {
+          "id": "task-010",
+          "title": "Implement audit event tracking",
+          "status": "completed",
+          "owner": "copilot",
+          "updated_on": "2026-04-02",
+          "notes": "Audit persistence and admin audit feed endpoint delivered"
+        },
+        {
+          "id": "task-011",
+          "title": "Implement notifications",
+          "status": "completed",
+          "owner": "copilot",
+          "updated_on": "2026-04-02",
+          "notes": "In-app notifications wired for messaging, consultations, documents, and payments"
+        },
+        {
+          "id": "task-012",
+          "title": "Implement Paystack simulation flow",
+          "status": "completed",
+          "owner": "copilot",
+          "updated_on": "2026-04-02",
+          "notes": "Paystack-style initialize and verify simulation APIs added"
+        }
+      ]
+    }
+  ],
+  "continuity": {
+    "project_context": "Nigeria-first legal marketplace MVP focused on trust, verification, and explainable problem-first matching.",
+    "timeline": [
+      {
+        "date": "2026-04-02",
+        "type": "milestone",
+        "summary": "Initialized FastAPI MVP with intake match and profile endpoints",
+        "refs": [
+          "task-001",
+          "feat-001",
+          "feat-004"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "milestone",
+        "summary": "Implemented balanced ranking with adaptive exposure bands and explainable reasons",
+        "refs": [
+          "task-003",
+          "feat-002",
+          "feat-003"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "testing",
+        "summary": "Baseline test suite passing",
+        "refs": [
+          "tests/test_api.py",
+          "tests/test_ranking.py"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "note",
+        "summary": "Validated continuity tracker workflow",
+        "refs": [
+          "task-005"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "decision",
+        "summary": "Tracker continuity: Use timeline + decisions + handoff commands",
+        "refs": []
+      },
+      {
+        "date": "2026-04-02",
+        "type": "status_change",
+        "summary": "task-004 -> completed",
+        "refs": [
+          "task-004"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "status_change",
+        "summary": "task-005 -> completed",
+        "refs": [
+          "task-005"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "note",
+        "summary": "Phase-2 delivered: persistence + complaint APIs + tests",
+        "refs": [
+          "task-004",
+          "task-005",
+          "feat-005"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "task_added",
+        "summary": "Added task-006: Implement auth and KYC endpoints",
+        "refs": [
+          "task-006",
+          "phase-1"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "status_change",
+        "summary": "task-006 -> completed",
+        "refs": [
+          "task-006"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "note",
+        "summary": "Phase-3 delivered: auth + KYC + tracker API",
+        "refs": [
+          "task-006"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "note",
+        "summary": "Migrated FastAPI startup to lifespan handler; removed on_event deprecation path",
+        "refs": [
+          "app/main.py"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "task_added",
+        "summary": "Added task-007: Implement token expiry and refresh rotation",
+        "refs": [
+          "task-007",
+          "phase-1"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "status_change",
+        "summary": "task-007 -> completed",
+        "refs": [
+          "task-007"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "decision",
+        "summary": "Session security model: Use short-lived access tokens and rotating refresh tokens",
+        "refs": []
+      },
+      {
+        "date": "2026-04-02",
+        "type": "task_added",
+        "summary": "Added task-008: Implement messaging, consultations, and payment simulation",
+        "refs": [
+          "task-008",
+          "phase-1"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "status_change",
+        "summary": "task-008 -> completed",
+        "refs": [
+          "task-008"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "note",
+        "summary": "Delivered messaging + consultation booking + payment simulation APIs",
+        "refs": [
+          "task-008"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "task_added",
+        "summary": "Added task-009: Implement secure consultation document handling",
+        "refs": [
+          "task-009",
+          "phase-1"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "status_change",
+        "summary": "task-009 -> completed",
+        "refs": [
+          "task-009"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "note",
+        "summary": "Delivered secure consultation document upload, listing, and download APIs",
+        "refs": [
+          "task-009",
+          "tests/test_workflows.py"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "task_added",
+        "summary": "Added task-010: Implement audit event tracking",
+        "refs": [
+          "task-010",
+          "phase-1"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "status_change",
+        "summary": "task-010 -> completed",
+        "refs": [
+          "task-010",
+          "feat-006"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "task_added",
+        "summary": "Added task-011: Implement notifications",
+        "refs": [
+          "task-011",
+          "phase-1"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "status_change",
+        "summary": "task-011 -> completed",
+        "refs": [
+          "task-011",
+          "feat-007"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "task_added",
+        "summary": "Added task-012: Implement Paystack simulation flow",
+        "refs": [
+          "task-012",
+          "phase-1"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "status_change",
+        "summary": "task-012 -> completed",
+        "refs": [
+          "task-012",
+          "feat-008"
+        ]
+      },
+      {
+        "date": "2026-04-02",
+        "type": "testing",
+        "summary": "Full suite passed after audit, notifications, and Paystack simulation updates",
+        "refs": [
+          "tests/test_audit_notifications.py",
+          "tests/test_workflows.py"
+        ]
+      }
+    ],
+    "decisions": [
+      {
+        "date": "2026-04-02",
+        "title": "Core matching approach",
+        "context": "User selected Option B and requested Nigeria-native trust architecture.",
+        "decision": "Use problem-first intake with balanced ranking and explainability.",
+        "impact": "Improves onboarding clarity and trust for first-time legal users.",
+        "owner": "product"
+      },
+      {
+        "date": "2026-04-02",
+        "title": "Fairness policy",
+        "context": "Need new-lawyer discovery without degrading trust.",
+        "decision": "Use quota rotation with adaptive exposure bands and strict eligibility gates.",
+        "impact": "Maintains quality while preventing incumbent lock-in.",
+        "owner": "product"
+      },
+      {
+        "date": "2026-04-02",
+        "title": "Tracker continuity",
+        "context": "Need continuity across sessions",
+        "decision": "Use timeline + decisions + handoff commands",
+        "impact": "Faster re-entry and less context loss",
+        "owner": "copilot"
+      },
+      {
+        "date": "2026-04-02",
+        "title": "Session security model",
+        "context": "Legal app needs continuous UX with strong security",
+        "decision": "Use short-lived access tokens and rotating refresh tokens",
+        "impact": "Seamless conversations with safer session handling",
+        "owner": "product"
+      }
+    ],
+    "assumptions": [
+      "Client identity uses NIN-only for low-friction onboarding.",
+      "Lawyer trust layer uses NIN + NBA; BVN supports payout workflows.",
+      "Escrow and payment protection workflows are phase-2 implementation."
+    ],
+    "next_focus": [
+      "Integrate real Paystack APIs and webhook signature verification.",
+      "Add out-of-band delivery channels (email/SMS) for notifications.",
+      "Ship frontend workflows for notifications, payments, and document management."
+    ]
+  }
+}
