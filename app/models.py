@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+import re
 from typing import List
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Urgency(str, Enum):
@@ -125,6 +126,18 @@ class SignUpRequest(BaseModel):
     password: str = Field(min_length=8, max_length=120)
     full_name: str = Field(min_length=2, max_length=120)
     role: UserRole
+    lawyer_id: str | None = Field(default=None, min_length=3, max_length=40)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_strength(cls, value: str) -> str:
+        has_upper = bool(re.search(r"[A-Z]", value))
+        has_lower = bool(re.search(r"[a-z]", value))
+        has_digit = bool(re.search(r"\d", value))
+        has_special = bool(re.search(r"[^A-Za-z0-9]", value))
+        if not (has_upper and has_lower and has_digit and has_special):
+            raise ValueError("Password must include uppercase, lowercase, number, and special character")
+        return value
 
 
 class LoginRequest(BaseModel):

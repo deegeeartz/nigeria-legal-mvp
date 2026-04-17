@@ -1,6 +1,6 @@
 {
   "project": "Nigeria Legal Marketplace MVP",
-  "last_updated": "2026-04-02",
+  "last_updated": "2026-04-17",
   "phases": [
     {
       "id": "phase-1",
@@ -149,6 +149,46 @@
           "owner": "copilot",
           "updated_on": "2026-04-02",
           "notes": "Paystack-style initialize and verify simulation APIs added"
+        },
+        {
+          "id": "task-013",
+          "title": "Security and auth hardening",
+          "status": "completed",
+          "owner": "copilot",
+          "updated_on": "2026-04-17",
+          "notes": "Implemented PBKDF2 password hashing, lawyer_id mapping, complaint auth guards, and auth rate limiting."
+        },
+        {
+          "id": "task-014",
+          "title": "Pilot environment and backups",
+          "status": "completed",
+          "owner": "copilot",
+          "updated_on": "2026-04-17",
+          "notes": "Added .env baseline, backup script, and pilot auth recovery runbook."
+        },
+        {
+          "id": "task-015",
+          "title": "Observability baseline setup",
+          "status": "completed",
+          "owner": "copilot",
+          "updated_on": "2026-04-17",
+          "notes": "Added request/error structured logging, request IDs, latency thresholding, and pilot alert checklist."
+        },
+        {
+          "id": "task-016",
+          "title": "Deployment and rollback pipeline",
+          "status": "completed",
+          "owner": "copilot",
+          "updated_on": "2026-04-17",
+          "notes": "Added deployment runbook, rollback checklist, smoke test script, and requirements cleanup."
+        },
+        {
+          "id": "task-017",
+          "title": "End-to-end UAT automation",
+          "status": "completed",
+          "owner": "copilot",
+          "updated_on": "2026-04-17",
+          "notes": "Added UAT runner script, scenario docs, and validated workflow-heavy test suites."
         }
       ]
     }
@@ -394,6 +434,117 @@
           "tests/test_audit_notifications.py",
           "tests/test_workflows.py"
         ]
+      },
+      {
+        "date": "2026-04-17",
+        "type": "task_added",
+        "summary": "Added task-013: Security and auth hardening",
+        "refs": [
+          "task-013",
+          "phase-1"
+        ]
+      },
+      {
+        "date": "2026-04-17",
+        "type": "task_added",
+        "summary": "Added task-014: Pilot environment and backups",
+        "refs": [
+          "task-014",
+          "phase-1"
+        ]
+      },
+      {
+        "date": "2026-04-17",
+        "type": "task_added",
+        "summary": "Added task-015: Observability baseline setup",
+        "refs": [
+          "task-015",
+          "phase-1"
+        ]
+      },
+      {
+        "date": "2026-04-17",
+        "type": "task_added",
+        "summary": "Added task-016: Deployment and rollback pipeline",
+        "refs": [
+          "task-016",
+          "phase-1"
+        ]
+      },
+      {
+        "date": "2026-04-17",
+        "type": "task_added",
+        "summary": "Added task-017: End-to-end UAT automation",
+        "refs": [
+          "task-017",
+          "phase-1"
+        ]
+      },
+      {
+        "date": "2026-04-17",
+        "type": "status_change",
+        "summary": "task-013 -> completed",
+        "refs": [
+          "task-013"
+        ]
+      },
+      {
+        "date": "2026-04-17",
+        "type": "status_change",
+        "summary": "task-014 -> completed",
+        "refs": [
+          "task-014"
+        ]
+      },
+      {
+        "date": "2026-04-17",
+        "type": "status_change",
+        "summary": "task-015 -> completed",
+        "refs": [
+          "task-015"
+        ]
+      },
+      {
+        "date": "2026-04-17",
+        "type": "status_change",
+        "summary": "task-016 -> completed",
+        "refs": [
+          "task-016"
+        ]
+      },
+      {
+        "date": "2026-04-17",
+        "type": "status_change",
+        "summary": "task-017 -> completed",
+        "refs": [
+          "task-017"
+        ]
+      },
+      {
+        "date": "2026-04-17",
+        "type": "decision",
+        "summary": "Pilot database strategy: Use SQLite for pilot while preparing PostgreSQL migration readiness before scale-out.",
+        "refs": []
+      },
+      {
+        "date": "2026-04-17",
+        "type": "note",
+        "summary": "Completed pilot readiness tranche: security hardening, observability, deployment pipeline, and UAT automation",
+        "refs": [
+          "task-013",
+          "task-014",
+          "task-015",
+          "task-016",
+          "task-017"
+        ]
+      },
+      {
+        "date": "2026-04-17",
+        "type": "note",
+        "summary": "Implementation log entry added: Tracker command validation",
+        "refs": [
+          "task-017"
+        ]
       }
     ],
     "decisions": [
@@ -427,6 +578,14 @@
         "context": "Legal app needs continuous UX with strong security",
         "decision": "Use short-lived access tokens and rotating refresh tokens",
         "impact": "Seamless conversations with safer session handling",
+        "owner": "product"
+      },
+      {
+        "date": "2026-04-17",
+        "title": "Pilot database strategy",
+        "context": "Need speed for first-wave validation with low operational overhead.",
+        "decision": "Use SQLite for pilot while preparing PostgreSQL migration readiness before scale-out.",
+        "impact": "Faster pilot launch with controlled migration risk.",
         "owner": "product"
       }
     ],

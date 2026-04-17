@@ -50,8 +50,28 @@ def test_lawyer_not_found() -> None:
 
 
 def test_file_and_resolve_complaint_flow() -> None:
+    filed_by = client.post(
+        "/api/auth/signup",
+        json={
+            "email": "complaint.client@example.com",
+            "password": "SecurePass123!",
+            "full_name": "Complaint Client",
+            "role": "client",
+        },
+    )
+    assert filed_by.status_code == 200
+    client_token = filed_by.json()["access_token"]
+
+    admin_login = client.post(
+        "/api/auth/login",
+        json={"email": "admin@legalmvp.local", "password": "AdminPass123!"},
+    )
+    assert admin_login.status_code == 200
+    admin_token = admin_login.json()["access_token"]
+
     file_response = client.post(
         "/api/complaints",
+        headers={"X-Auth-Token": client_token},
         json={
             "lawyer_id": "lw_001",
             "category": "misconduct",
@@ -63,13 +83,14 @@ def test_file_and_resolve_complaint_flow() -> None:
     assert filed["status"] == "open"
     assert filed["severity"] == "severe"
 
-    list_response = client.get("/api/complaints/lw_001")
+    list_response = client.get("/api/complaints/lw_001", headers={"X-Auth-Token": client_token})
     assert list_response.status_code == 200
     complaints = list_response.json()
     assert complaints
 
     resolve_response = client.post(
         f"/api/complaints/{filed['complaint_id']}/resolve",
+        headers={"X-Auth-Token": admin_token},
         json={"action": "uphold", "resolution_note": "Reviewed and closed after enforcement."},
     )
     assert resolve_response.status_code == 200

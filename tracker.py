@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 TRACKER_PATH = Path(__file__).parent / "implementation_tracker.json"
+IMPLEMENTATION_LOG_PATH = Path(__file__).parent / "IMPLEMENTATION_LOG.md"
 VALID_STATUSES = {"todo", "in-progress", "completed", "blocked"}
 
 
@@ -202,6 +203,41 @@ def add_task(payload: dict[str, Any], phase_id: str, title: str, owner: str) -> 
     append_timeline(payload, "task_added", f"Added {task_id}: {title}", refs=[task_id, phase_id])
 
 
+def _markdown_bullets(items: list[str]) -> str:
+    if not items:
+        return "- N/A\n"
+    return "".join(f"- {item}\n" for item in items)
+
+
+def append_implementation_log_entry(
+    title: str,
+    summary: str,
+    implemented: list[str],
+    validation: list[str],
+    decision: str | None,
+    refs: list[str],
+) -> None:
+    entry = (
+        f"\n### {_today()} — {title}\n\n"
+        f"**Summary**\n"
+        f"- {summary}\n\n"
+        f"**Implemented**\n"
+        f"{_markdown_bullets(implemented)}\n"
+        f"**Validation**\n"
+        f"{_markdown_bullets(validation)}"
+    )
+
+    if decision:
+        entry += f"\n**Decision Logged**\n- {decision}\n"
+
+    if refs:
+        refs_text = ", ".join(refs)
+        entry += f"\n**Related Tracker Items**\n- {refs_text}\n"
+
+    with IMPLEMENTATION_LOG_PATH.open("a", encoding="utf-8") as file:
+        file.write(entry)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Project implementation tracker utility")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -231,6 +267,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     ctx = sub.add_parser("set-context", help="Set persistent project context for continuity")
     ctx.add_argument("context", help="High-level project context")
+
+    impl = sub.add_parser("log-implementation", help="Append a structured entry to IMPLEMENTATION_LOG.md")
+    impl.add_argument("title", help="Implementation milestone title")
+    impl.add_argument("--summary", default="Implementation milestone completed", help="One-line summary")
+    impl.add_argument("--implemented", nargs="*", default=[], help="Implemented bullet points")
+    impl.add_argument("--validation", nargs="*", default=[], help="Validation/testing bullet points")
+    impl.add_argument("--decision", help="Optional decision note")
+    impl.add_argument("--refs", nargs="*", default=[], help="Related tracker task/feature ids")
 
     sub.add_parser("handoff", help="Print continuity summary for next session")
 
@@ -275,6 +319,20 @@ def main() -> None:
         set_context(payload, args.context)
         save_tracker(payload)
         print("Context updated")
+        return
+
+    if args.command == "log-implementation":
+        append_implementation_log_entry(
+            title=args.title,
+            summary=args.summary,
+            implemented=args.implemented,
+            validation=args.validation,
+            decision=args.decision,
+            refs=args.refs,
+        )
+        add_note(payload, f"Implementation log entry added: {args.title}", refs=args.refs)
+        save_tracker(payload)
+        print("Implementation log entry appended")
         return
 
     if args.command == "handoff":

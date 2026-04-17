@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import os
 import sqlite3
-from hashlib import sha256
+from hashlib import pbkdf2_hmac, sha256
 from secrets import token_hex
+import secrets
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,7 @@ DB_PATH = Path(os.getenv("APP_DB_PATH", str(BASE_DIR / "legal_mvp.db")))
 UPLOADS_DIR = Path(os.getenv("APP_UPLOADS_DIR", str(BASE_DIR / "storage" / "uploads")))
 ACCESS_TOKEN_TTL_MINUTES = int(os.getenv("ACCESS_TOKEN_TTL_MINUTES", "60"))
 REFRESH_TOKEN_TTL_DAYS = int(os.getenv("REFRESH_TOKEN_TTL_DAYS", "30"))
+PASSWORD_HASH_ITERATIONS = int(os.getenv("PASSWORD_HASH_ITERATIONS", "260000"))
 
 
 def connect() -> sqlite3.Connection:
@@ -76,6 +78,7 @@ def init_db() -> None:
                 password_hash TEXT NOT NULL,
                 full_name TEXT NOT NULL,
                 role TEXT NOT NULL,
+                lawyer_id TEXT,
                 created_on TEXT NOT NULL
             )
             """
@@ -219,6 +222,7 @@ def init_db() -> None:
         conn.commit()
     _ensure_sessions_schema()
     _ensure_payments_schema()
+    _ensure_users_schema()
 
 
 def _now() -> datetime:
@@ -332,6 +336,23 @@ def _ensure_payments_schema() -> None:
             conn.commit()
 
 
+def _ensure_users_schema() -> None:
+    with connect() as conn:
+        rows = conn.execute("PRAGMA table_info(users)").fetchall()
+        columns = {row["name"] for row in rows}
+        if not columns:
+            return
+
+        alter_statements = []
+        if "lawyer_id" not in columns:
+            alter_statements.append("ALTER TABLE users ADD COLUMN lawyer_id TEXT")
+
+        for statement in alter_statements:
+            conn.execute(statement)
+        if alter_statements:
+            conn.commit()
+
+
 def _serialize_practice_areas(practice_areas: list[str]) -> str:
     return ",".join(practice_areas)
 
@@ -385,10 +406,11 @@ def seed_users_if_empty() -> None:
             return
 
         admin_hash = sha256("AdminPass123!".encode("utf-8")).hexdigest()
+        admin_hash = _hash_password("AdminPass123!")
         conn.execute(
             """
-            INSERT INTO users (email, password_hash, full_name, role, created_on)
-            VALUES (?, ?, ?, 'admin', ?)
+            INSERT INTO users (email, password_hash, full_name, role, lawyer_id, created_on)
+            VALUES (?, ?, ?, 'admin', NULL, ?)
             """,
             ("admin@legalmvp.local", admin_hash, "Platform Admin", str(date.today())),
         )
@@ -577,18 +599,52 @@ def reset_db_for_tests() -> None:
 
 
 def _hash_password(password: str) -> str:
-    return sha256(password.encode("utf-8")).hexdigest()
+    salt = secrets.token_bytes(16)
+    digest = pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PASSWORD_HASH_ITERATIONS)
+    return f"pbkdf2_sha256${PASSWORD_HASH_ITERATIONS}${salt.hex()}${digest.hex()}"
 
 
-def create_user(email: str, password: str, full_name: str, role: str) -> dict[str, Any] | None:
+def _verify_password(password: str, stored_hash: str) -> bool:
+    if stored_hash.startswith("pbkdf2_sha256$"):
+        parts = stored_hash.split("$", 3)
+        if len(parts) != 4:
+            return False
+        _, iterations_text, salt_hex, digest_hex = parts
+        try:
+            iterations = int(iterations_text)
+            salt = bytes.fromhex(salt_hex)
+            expected_digest = bytes.fromhex(digest_hex)
+        except (ValueError, TypeError):
+            return False
+        candidate = pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+        return secrets.compare_digest(candidate, expected_digest)
+
+    legacy_digest = sha256(password.encode("utf-8")).hexdigest()
+    return secrets.compare_digest(legacy_digest, stored_hash)
+
+
+def create_user(
+    email: str,
+    password: str,
+    full_name: str,
+    role: str,
+    lawyer_id: str | None = None,
+) -> dict[str, Any] | None:
+    if role != "lawyer":
+        lawyer_id = None
+    elif lawyer_id:
+        linked_lawyer = get_lawyer(lawyer_id)
+        if linked_lawyer is None:
+            return None
+
     try:
         with connect() as conn:
             conn.execute(
                 """
-                INSERT INTO users (email, password_hash, full_name, role, created_on)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO users (email, password_hash, full_name, role, lawyer_id, created_on)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (email.lower(), _hash_password(password), full_name, role, str(date.today())),
+                (email.lower(), _hash_password(password), full_name, role, lawyer_id, str(date.today())),
             )
             conn.commit()
             row = conn.execute("SELECT * FROM users WHERE email = ?", (email.lower(),)).fetchone()
@@ -626,8 +682,14 @@ def authenticate_user(email: str, password: str) -> dict[str, Any] | None:
         user = conn.execute("SELECT * FROM users WHERE email = ?", (email.lower(),)).fetchone()
     if user is None:
         return None
-    if user["password_hash"] != _hash_password(password):
+    if not _verify_password(password, user["password_hash"]):
         return None
+
+    if not user["password_hash"].startswith("pbkdf2_sha256$"):
+        with connect() as conn:
+            conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (_hash_password(password), user["id"]))
+            conn.commit()
+            user = conn.execute("SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
 
     token_bundle = _create_session(user["id"])
     payload = dict(user)
@@ -644,7 +706,7 @@ def get_user_by_access_token(access_token: str) -> dict[str, Any] | None:
     with connect() as conn:
         row = conn.execute(
             """
-            SELECT users.id, users.email, users.full_name, users.role
+            SELECT users.id, users.email, users.full_name, users.role, users.lawyer_id
             FROM sessions
             JOIN users ON users.id = sessions.user_id
             WHERE sessions.access_token = ?
@@ -867,15 +929,8 @@ def user_can_access_conversation(user: dict[str, Any], conversation_id: int) -> 
     if user["role"] == "client":
         return conversation["client_user_id"] == user["id"]
     if user["role"] == "lawyer":
-        lawyer = conn_user_lawyer_map(user["full_name"])
-        return lawyer is not None and lawyer["id"] == conversation["lawyer_id"]
+        return user.get("lawyer_id") == conversation["lawyer_id"]
     return False
-
-
-def conn_user_lawyer_map(full_name: str) -> dict[str, Any] | None:
-    with connect() as conn:
-        row = conn.execute("SELECT * FROM lawyers WHERE full_name = ?", (full_name,)).fetchone()
-    return dict(row) if row else None
 
 
 def create_consultation(client_user_id: int, lawyer_id: str, scheduled_for: str, summary: str) -> dict[str, Any] | None:
@@ -911,8 +966,7 @@ def user_can_access_consultation(user: dict[str, Any], consultation_id: int) -> 
     if user["role"] == "client":
         return consultation["client_user_id"] == user["id"]
     if user["role"] == "lawyer":
-        lawyer = conn_user_lawyer_map(user["full_name"])
-        return lawyer is not None and lawyer["id"] == consultation["lawyer_id"]
+        return user.get("lawyer_id") == consultation["lawyer_id"]
     return False
 
 
@@ -1158,8 +1212,8 @@ def get_lawyer_user_ids(lawyer_id: str) -> list[int]:
         return []
     with connect() as conn:
         rows = conn.execute(
-            "SELECT id FROM users WHERE full_name = ? AND role = 'lawyer'",
-            (lawyer.full_name,),
+            "SELECT id FROM users WHERE lawyer_id = ? AND role = 'lawyer'",
+            (lawyer_id,),
         ).fetchall()
     return [row["id"] for row in rows]
 

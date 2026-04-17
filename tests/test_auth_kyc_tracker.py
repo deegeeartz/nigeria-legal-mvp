@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.db import force_expire_access_token_for_tests, reset_db_for_tests
-from app.main import app
+from app.main import app, reset_auth_rate_limits_for_tests
 
 
 client = TestClient(app)
@@ -11,6 +11,7 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def reset_db() -> None:
     reset_db_for_tests()
+    reset_auth_rate_limits_for_tests()
 
 
 def test_signup_and_me_flow() -> None:
@@ -148,3 +149,47 @@ def test_logout_revokes_tokens() -> None:
 
     refresh = client.post("/api/auth/refresh", json={"refresh_token": body["refresh_token"]})
     assert refresh.status_code == 401
+
+
+def test_signup_rejects_weak_password() -> None:
+    response = client.post(
+        "/api/auth/signup",
+        json={
+            "email": "weakpass@example.com",
+            "password": "password123",
+            "full_name": "Weak Password User",
+            "role": "client",
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_login_rate_limits_repeated_failed_attempts() -> None:
+    for _ in range(5):
+        response = client.post(
+            "/api/auth/login",
+            json={"email": "admin@legalmvp.local", "password": "WrongPass123!"},
+        )
+        assert response.status_code == 401
+
+    blocked = client.post(
+        "/api/auth/login",
+        json={"email": "admin@legalmvp.local", "password": "WrongPass123!"},
+    )
+    assert blocked.status_code == 429
+
+
+def test_refresh_rate_limits_repeated_failed_attempts() -> None:
+    bad_token = "invalid-refresh-token-value"
+    for _ in range(8):
+        response = client.post(
+            "/api/auth/refresh",
+            json={"refresh_token": bad_token},
+        )
+        assert response.status_code == 401
+
+    blocked = client.post(
+        "/api/auth/refresh",
+        json={"refresh_token": bad_token},
+    )
+    assert blocked.status_code == 429

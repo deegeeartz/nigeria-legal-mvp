@@ -11,7 +11,7 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def reset_db() -> None:
     reset_db_for_tests()
-    create_user("lawyer.user@example.com", "SecurePass123!", "Sadiq Bello", "lawyer")
+    create_user("lawyer.user@example.com", "SecurePass123!", "Sadiq Bello", "lawyer", "lw_004")
 
 
 def _signup_client() -> dict:

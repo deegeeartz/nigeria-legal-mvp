@@ -11,10 +11,14 @@ A FastAPI MVP implementing the agreed Nigeria-first legal matching strategy:
 
 - `POST /api/auth/signup`:
   - Registers a user and returns a session token
+  - For `role=lawyer`, supports optional `lawyer_id` linkage to a seeded lawyer profile
+  - Enforces password complexity (uppercase + lowercase + number + special character)
 - `POST /api/auth/login`:
   - Authenticates user and returns `access_token` + `refresh_token`
+  - Applies short-window failed-attempt rate limiting per email
 - `POST /api/auth/refresh`:
   - Rotates refresh token and issues new access/refresh token pair
+  - Applies short-window failed-attempt rate limiting per refresh token
 - `POST /api/auth/logout`:
   - Revokes active session using access and/or refresh token
 - `GET /api/auth/me`:
@@ -33,11 +37,11 @@ A FastAPI MVP implementing the agreed Nigeria-first legal matching strategy:
 - `GET /api/lawyers/{lawyer_id}`:
   - Returns contextual profile stats and verification state
 - `POST /api/complaints`:
-  - Files a complaint and applies hybrid trigger logic (`minor|major|severe`)
+  - Files a complaint and applies hybrid trigger logic (`minor|major|severe`) (`X-Auth-Token` required)
 - `GET /api/complaints/{lawyer_id}`:
   - Lists complaints for a lawyer
 - `POST /api/complaints/{complaint_id}/resolve`:
-  - Resolves a complaint (`uphold|reject`) and recalculates trust flags
+  - Resolves a complaint (`uphold|reject`) and recalculates trust flags (admin-only)
 - `POST /api/kyc/verify`:
   - Admin-only endpoint to update lawyer verification status
 - `GET /api/kyc/{lawyer_id}`:
@@ -104,6 +108,24 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+### Pilot environment file
+
+Use `.env.example` as the baseline for pilot settings.
+
+Key variables:
+
+- `APP_DB_PATH`
+- `APP_UPLOADS_DIR`
+- `ACCESS_TOKEN_TTL_MINUTES`
+- `REFRESH_TOKEN_TTL_DAYS`
+- `PASSWORD_HASH_ITERATIONS`
+- `AUTH_RATE_LIMIT_WINDOW_SECONDS`
+- `LOGIN_FAILURE_LIMIT`
+- `REFRESH_FAILURE_LIMIT`
+- `LOG_LEVEL`
+- `SLOW_REQUEST_MS`
+- `ENABLE_REQUEST_LOGGING`
+
 ## Run
 
 ```powershell
@@ -116,6 +138,40 @@ python run.py
 ```powershell
 cd C:\Users\PC\Desktop\nigeria-legal-mvp
 pytest -q
+```
+
+## Deployment Pipeline (Pilot)
+
+Use these deployment assets:
+
+- `docs/deployment-runbook.md`
+- `docs/rollback-checklist.md`
+- `scripts/smoke_test.ps1`
+- `scripts/uat_runner.py`
+- `docs/uat-scenarios.md`
+
+### Pilot deploy sequence
+
+```powershell
+cd C:\Users\PC\Desktop\nigeria-legal-mvp
+pip install -r requirements.txt
+pytest -q
+.\scripts\backup_pilot.ps1 -DbPath "C:\Users\PC\Desktop\nigeria-legal-mvp\pilot_legal_mvp.db" -UploadsDir "C:\Users\PC\Desktop\nigeria-legal-mvp\storage\uploads"
+python run.py
+```
+
+In another terminal after startup:
+
+```powershell
+cd C:\Users\PC\Desktop\nigeria-legal-mvp
+.\scripts\smoke_test.ps1 -BaseUrl "http://127.0.0.1:8000"
+```
+
+Optional full UAT run:
+
+```powershell
+cd C:\Users\PC\Desktop\nigeria-legal-mvp
+c:/python313/python.exe scripts/uat_runner.py --base-url http://127.0.0.1:8000
 ```
 
 ## Quick auth example
@@ -141,6 +197,7 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/auth/logout -Heade
 ## Notes
 
 - This MVP now uses SQLite (`legal_mvp.db`) with startup seeding from `app/data.py`.
+- Pilot strategy: keep SQLite for first-wave users, then migrate to PostgreSQL before scale-out.
 - The badge/tier guardrail is enforced in responses:
   - "Ranking reflects platform performance and verification signals. It is not an official NBA or government ranking."
 - Consultation documents are stored in `storage/uploads` and are limited to 10MB per file.
@@ -148,9 +205,59 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/auth/logout -Heade
 - Sensitive actions are captured in audit events and accessible through `GET /api/audit-events` (admin-only).
 - Payment flow now uses a Paystack-style simulation contract (`initialize` + `verify`) while keeping simulation safety for MVP.
 
+## Pilot DB Mode (SQLite)
+
+Use SQLite for pilot testing while product, onboarding, and workflows are still changing.
+
+### Recommended pilot guardrails
+
+- Run a single app instance per environment (SQLite file locking is not ideal for multi-instance writes).
+- Keep daily backups of `legal_mvp.db` and `storage/uploads`.
+- Use `APP_DB_PATH` to isolate environments (dev, staging, pilot).
+- Monitor write-heavy operations (`messages`, `payments`, `notifications`) for latency spikes.
+
+### Example pilot run with explicit DB path
+
+```powershell
+cd C:\Users\PC\Desktop\nigeria-legal-mvp
+$env:APP_DB_PATH = "C:\Users\PC\Desktop\nigeria-legal-mvp\pilot_legal_mvp.db"
+python run.py
+```
+
+### Pilot backup routine (database + uploads)
+
+```powershell
+cd C:\Users\PC\Desktop\nigeria-legal-mvp
+.
+\scripts\backup_pilot.ps1 -DbPath "C:\Users\PC\Desktop\nigeria-legal-mvp\pilot_legal_mvp.db" -UploadsDir "C:\Users\PC\Desktop\nigeria-legal-mvp\storage\uploads"
+```
+
+### Auth lockout recovery
+
+If users hit repeated auth `429` responses during pilot, follow `docs/pilot-auth-recovery-runbook.md`.
+
+### Observability baseline
+
+- Request logs are emitted as JSON lines with `event`, `request_id`, `path`, `status_code`, and `duration_ms`.
+- Slow requests are flagged when `duration_ms >= SLOW_REQUEST_MS`.
+- Unhandled request exceptions are logged as `event=request_error`.
+- Use `docs/pilot-alert-checklist.md` for lightweight pilot alerting and operator response.
+
+## Migration Trigger (SQLite -> PostgreSQL)
+
+Plan migration when any of these conditions hold for more than a short period:
+
+- Concurrent active users are consistently above pilot expectations.
+- You need multi-instance app deployment (horizontal scaling).
+- Write contention/latency appears in production-like traffic.
+- You need stronger operational tooling (replication, managed backups, richer analytics queries).
+
+Use the phased runbook in `docs/db-migration-plan.md`.
+
 ## Implementation Tracker
 
 The project now includes a live tracker in `implementation_tracker.json` and a utility script in `tracker.py`.
+There is also a running implementation history in `IMPLEMENTATION_LOG.md`.
 
 ### List tracker status
 
@@ -185,6 +292,13 @@ c:/python313/python.exe tracker.py log-decision "Exposure policy" "Keep adaptive
 ```powershell
 cd C:\Users\PC\Desktop\nigeria-legal-mvp
 c:/python313/python.exe tracker.py log-note "Implemented complaint trigger matrix draft" --refs task-005 feat-005
+```
+
+### Append to implementation log
+
+```powershell
+cd C:\Users\PC\Desktop\nigeria-legal-mvp
+c:/python313/python.exe tracker.py log-implementation "Pilot readiness checkpoint" --summary "Completed pilot hardening and operations baseline" --implemented "Security hardening complete" "Observability baseline added" --validation "pytest suites passing" --refs task-013 task-014 task-015
 ```
 
 ### Set project context (persistent handoff summary)

@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
+from threading import Lock
+from time import monotonic
+from uuid import uuid4
 
-from fastapi import FastAPI, File, Form, Header, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 
 from app.db import (
@@ -86,6 +91,39 @@ from app.ranking import DISCLAIMER, expertise_tier, rank_lawyers
 MAX_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024
 
 
+def _env_int(name: str, default: int) -> int:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    try:
+        parsed = int(raw_value)
+    except ValueError:
+        return default
+    return parsed if parsed > 0 else default
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    return raw_value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+AUTH_RATE_LIMIT_WINDOW_SECONDS = _env_int("AUTH_RATE_LIMIT_WINDOW_SECONDS", 60)
+LOGIN_FAILURE_LIMIT = _env_int("LOGIN_FAILURE_LIMIT", 5)
+REFRESH_FAILURE_LIMIT = _env_int("REFRESH_FAILURE_LIMIT", 8)
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+SLOW_REQUEST_MS = _env_int("SLOW_REQUEST_MS", 800)
+ENABLE_REQUEST_LOGGING = _env_bool("ENABLE_REQUEST_LOGGING", True)
+
+logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO), format="%(message)s")
+logger = logging.getLogger("legal_mvp")
+
+_failed_login_attempts: dict[str, list[float]] = {}
+_failed_refresh_attempts: dict[str, list[float]] = {}
+_auth_rate_lock = Lock()
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
@@ -95,6 +133,49 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Nigeria Legal Marketplace MVP", version="0.1.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def request_observability_middleware(request: Request, call_next):
+    if not ENABLE_REQUEST_LOGGING:
+        return await call_next(request)
+
+    request_id = request.headers.get("X-Request-Id") or uuid4().hex[:12]
+    started_at = monotonic()
+    try:
+        response = await call_next(request)
+    except Exception:
+        duration_ms = round((monotonic() - started_at) * 1000, 2)
+        logger.exception(
+            json.dumps(
+                {
+                    "event": "request_error",
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": request.url.path,
+                    "duration_ms": duration_ms,
+                }
+            )
+        )
+        raise
+
+    duration_ms = round((monotonic() - started_at) * 1000, 2)
+    log_level = logging.WARNING if duration_ms >= SLOW_REQUEST_MS else logging.INFO
+    logger.log(
+        log_level,
+        json.dumps(
+            {
+                "event": "request_complete",
+                "request_id": request_id,
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": response.status_code,
+                "duration_ms": duration_ms,
+            }
+        ),
+    )
+    response.headers["X-Request-Id"] = request_id
+    return response
 
 
 def log_event(actor_user_id: int | None, action: str, resource_type: str, resource_id: str | None, detail: str) -> None:
@@ -115,6 +196,37 @@ def notify_users(
         if exclude_user_id is not None and user_id == exclude_user_id:
             continue
         create_notification(user_id, kind, title, body, resource_type, resource_id)
+
+
+def _rate_limit_key(raw_value: str) -> str:
+    return raw_value.strip().lower()
+
+
+def _is_rate_limited(store: dict[str, list[float]], key: str, limit: int) -> bool:
+    now = monotonic()
+    with _auth_rate_lock:
+        attempts = [value for value in store.get(key, []) if now - value < AUTH_RATE_LIMIT_WINDOW_SECONDS]
+        store[key] = attempts
+        return len(attempts) >= limit
+
+
+def _record_failed_attempt(store: dict[str, list[float]], key: str) -> None:
+    now = monotonic()
+    with _auth_rate_lock:
+        attempts = [value for value in store.get(key, []) if now - value < AUTH_RATE_LIMIT_WINDOW_SECONDS]
+        attempts.append(now)
+        store[key] = attempts
+
+
+def _clear_failed_attempts(store: dict[str, list[float]], key: str) -> None:
+    with _auth_rate_lock:
+        store.pop(key, None)
+
+
+def reset_auth_rate_limits_for_tests() -> None:
+    with _auth_rate_lock:
+        _failed_login_attempts.clear()
+        _failed_refresh_attempts.clear()
 
 
 def to_payment_response(payment: dict) -> PaymentResponse:
@@ -191,9 +303,9 @@ def health() -> dict:
 
 @app.post("/api/auth/signup", response_model=AuthResponse)
 def signup(payload: SignUpRequest) -> AuthResponse:
-    created = create_user(payload.email, payload.password, payload.full_name, payload.role.value)
+    created = create_user(payload.email, payload.password, payload.full_name, payload.role.value, payload.lawyer_id)
     if created is None:
-        raise HTTPException(status_code=409, detail="User already exists")
+        raise HTTPException(status_code=409, detail="User already exists or invalid lawyer_id")
 
     token_bundle = create_session_for_user(created["id"])
     log_event(created["id"], "auth.signup", "user", str(created["id"]), f"User signed up as {created['role']}")
@@ -211,9 +323,16 @@ def signup(payload: SignUpRequest) -> AuthResponse:
 
 @app.post("/api/auth/login", response_model=AuthResponse)
 def login(payload: LoginRequest) -> AuthResponse:
+    email_key = _rate_limit_key(payload.email)
+    if _is_rate_limited(_failed_login_attempts, email_key, LOGIN_FAILURE_LIMIT):
+        raise HTTPException(status_code=429, detail="Too many failed login attempts. Please try again shortly.")
+
     user = authenticate_user(payload.email, payload.password)
     if user is None:
+        _record_failed_attempt(_failed_login_attempts, email_key)
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    _clear_failed_attempts(_failed_login_attempts, email_key)
 
     log_event(user["id"], "auth.login", "user", str(user["id"]), "User authenticated successfully")
 
@@ -231,9 +350,16 @@ def login(payload: LoginRequest) -> AuthResponse:
 
 @app.post("/api/auth/refresh", response_model=AuthResponse)
 def refresh_token(payload: RefreshTokenRequest) -> AuthResponse:
+    refresh_key = payload.refresh_token.strip()
+    if _is_rate_limited(_failed_refresh_attempts, refresh_key, REFRESH_FAILURE_LIMIT):
+        raise HTTPException(status_code=429, detail="Too many failed refresh attempts. Please try again shortly.")
+
     user = refresh_session(payload.refresh_token)
     if user is None:
+        _record_failed_attempt(_failed_refresh_attempts, refresh_key)
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+
+    _clear_failed_attempts(_failed_refresh_attempts, refresh_key)
 
     log_event(user["id"], "auth.refresh", "user", str(user["id"]), "Refresh token rotated successfully")
 
@@ -314,12 +440,16 @@ def lawyer_profile(lawyer_id: str) -> LawyerProfileResponse:
 
 
 @app.post("/api/complaints", response_model=ComplaintResponse)
-def file_complaint(payload: ComplaintCreateRequest) -> ComplaintResponse:
+def file_complaint(
+    payload: ComplaintCreateRequest,
+    x_auth_token: str | None = Header(default=None, alias="X-Auth-Token"),
+) -> ComplaintResponse:
+    actor = require_user(x_auth_token)
     created = create_complaint(payload.lawyer_id, payload.category, payload.details)
     if created is None:
         raise HTTPException(status_code=404, detail="Lawyer not found")
 
-    log_event(None, "complaint.created", "complaint", str(created["id"]), f"Complaint filed against {created['lawyer_id']}")
+    log_event(actor["id"], "complaint.created", "complaint", str(created["id"]), f"Complaint filed against {created['lawyer_id']}")
 
     return ComplaintResponse(
         complaint_id=created["id"],
@@ -335,7 +465,11 @@ def file_complaint(payload: ComplaintCreateRequest) -> ComplaintResponse:
 
 
 @app.get("/api/complaints/{lawyer_id}", response_model=list[ComplaintResponse])
-def list_complaints(lawyer_id: str) -> list[ComplaintResponse]:
+def list_complaints(
+    lawyer_id: str,
+    x_auth_token: str | None = Header(default=None, alias="X-Auth-Token"),
+) -> list[ComplaintResponse]:
+    require_user(x_auth_token)
     return [
         ComplaintResponse(
             complaint_id=item["id"],
@@ -353,12 +487,17 @@ def list_complaints(lawyer_id: str) -> list[ComplaintResponse]:
 
 
 @app.post("/api/complaints/{complaint_id}/resolve", response_model=ComplaintResponse)
-def resolve_complaint_endpoint(complaint_id: int, payload: ComplaintActionRequest) -> ComplaintResponse:
+def resolve_complaint_endpoint(
+    complaint_id: int,
+    payload: ComplaintActionRequest,
+    x_auth_token: str | None = Header(default=None, alias="X-Auth-Token"),
+) -> ComplaintResponse:
+    actor = require_admin(x_auth_token)
     resolved = resolve_complaint(complaint_id, payload.action, payload.resolution_note)
     if resolved is None:
         raise HTTPException(status_code=404, detail="Complaint not found")
 
-    log_event(None, "complaint.resolved", "complaint", str(complaint_id), f"Complaint marked {resolved['status']}")
+    log_event(actor["id"], "complaint.resolved", "complaint", str(complaint_id), f"Complaint marked {resolved['status']}")
 
     return ComplaintResponse(
         complaint_id=resolved["id"],
