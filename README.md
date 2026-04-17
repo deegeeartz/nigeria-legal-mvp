@@ -1,6 +1,7 @@
 # Nigeria Legal Marketplace MVP
 
 A FastAPI MVP implementing the agreed Nigeria-first legal matching strategy:
+
 - Problem-first intake (Option B)
 - Balanced ranking model
 - Adaptive new-lawyer exposure bands (`25/20/15/10`)
@@ -94,7 +95,7 @@ A FastAPI MVP implementing the agreed Nigeria-first legal matching strategy:
 - `tests/test_ranking.py` - ranking and policy tests
 - `tests/test_complaints.py` - complaint trigger and DB tests
 - `tests/test_auth_kyc_tracker.py` - auth, role guards, KYC, tracker API tests
-- `tests/test_workflows.py` - chat, consultation, payment simulation, and document access tests  
+- `tests/test_workflows.py` - chat, consultation, payment simulation, and document access tests
 - `tests/test_audit_notifications.py` - audit feed, notification flow, and Paystack simulation tests
 - `storage/uploads` - local document storage used by the MVP
 - `run.py` - local dev runner

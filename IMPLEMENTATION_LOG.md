@@ -13,9 +13,11 @@ This file is the single running log of implementation progress for the project.
 ### 2026-04-17 — Pilot Readiness Tranche Completed
 
 **Summary**
+
 - Completed core pilot hardening and operational readiness before first-wave users.
 
 **Implemented**
+
 - Security/auth hardening:
   - PBKDF2 password hashing with backward-compatible verification/migration
   - Explicit `lawyer_id` linkage for lawyer authorization
@@ -38,13 +40,16 @@ This file is the single running log of implementation progress for the project.
   - Added UAT scenario doc (`docs/uat-scenarios.md`)
 
 **Validation**
+
 - Test suite status confirmed with `pytest` runs (`28 passed` across latest full/targeted runs).
 - Smoke test executed successfully against live local instance.
 
 **Decision Logged**
+
 - Pilot DB strategy: continue with SQLite for pilot, prepare PostgreSQL readiness before scale-out.
 
 **Related Tracker Items**
+
 - `task-013` through `task-017` marked completed.
 
 ---
@@ -73,14 +78,18 @@ This file is the single running log of implementation progress for the project.
 ### 2026-04-17 — Tracker command validation
 
 **Summary**
+
 - Validated CLI appends implementation entry
 
 **Implemented**
+
 - Added tracker command
 - Synced timeline note
 
 **Validation**
+
 - Command exits successfully
 
 **Related Tracker Items**
+
 - task-017

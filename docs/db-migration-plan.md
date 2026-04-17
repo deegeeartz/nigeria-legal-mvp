@@ -18,6 +18,7 @@ This runbook keeps delivery speed high in pilot while preparing a low-risk trans
 - Avoid multi-instance writes in production during this phase.
 
 Exit criteria:
+
 - Product workflows validated with real pilot users.
 - Initial traffic and write patterns understood.
 
@@ -29,6 +30,7 @@ Exit criteria:
 - Add staging environment on PostgreSQL.
 
 Exit criteria:
+
 - App starts and passes tests against PostgreSQL in staging.
 - Schema migration scripts are reproducible from empty DB.
 
@@ -43,6 +45,7 @@ Exit criteria:
 - Run full test suite and key end-to-end smoke checks.
 
 Exit criteria:
+
 - No data loss and no contract regressions.
 - Performance is acceptable on staging load.
 
@@ -55,6 +58,7 @@ Exit criteria:
 - Monitor errors, latency, and payment/document flows closely.
 
 Rollback plan:
+
 - Revert app config to SQLite.
 - Restore latest SQLite backup if needed.
 
