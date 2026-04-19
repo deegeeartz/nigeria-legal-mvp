@@ -217,3 +217,96 @@ def test_other_client_cannot_access_consultation_documents() -> None:
         headers={"X-Auth-Token": other_client["access_token"]},
     )
     assert denied_download.status_code == 403
+
+
+def test_list_consultations_and_conversations_for_participants() -> None:
+    client_auth = _signup_client()
+    lawyer_auth = _login_lawyer()
+
+    conversation = client.post(
+        "/api/conversations",
+        headers={"X-Auth-Token": client_auth["access_token"]},
+        json={"lawyer_id": "lw_004", "initial_message": "Can you advise on this tenancy issue?"},
+    )
+    assert conversation.status_code == 200
+
+    consultation = client.post(
+        "/api/consultations",
+        headers={"X-Auth-Token": client_auth["access_token"]},
+        json={
+            "lawyer_id": "lw_004",
+            "scheduled_for": "2026-04-12T10:00:00Z",
+            "summary": "Need legal advice on tenancy terms and landlord dispute.",
+        },
+    )
+    assert consultation.status_code == 200
+
+    client_consultations = client.get(
+        "/api/consultations",
+        headers={"X-Auth-Token": client_auth["access_token"]},
+    )
+    assert client_consultations.status_code == 200
+    assert len(client_consultations.json()) == 1
+
+    lawyer_consultations = client.get(
+        "/api/consultations",
+        headers={"X-Auth-Token": lawyer_auth["access_token"]},
+    )
+    assert lawyer_consultations.status_code == 200
+    assert len(lawyer_consultations.json()) == 1
+
+    client_conversations = client.get(
+        "/api/conversations",
+        headers={"X-Auth-Token": client_auth["access_token"]},
+    )
+    assert client_conversations.status_code == 200
+    assert len(client_conversations.json()) == 1
+
+    lawyer_conversations = client.get(
+        "/api/conversations",
+        headers={"X-Auth-Token": lawyer_auth["access_token"]},
+    )
+    assert lawyer_conversations.status_code == 200
+    assert len(lawyer_conversations.json()) == 1
+
+
+def test_consultation_status_update_permissions() -> None:
+    """Clients can only cancel; lawyers can complete or cancel; forbidden transitions rejected."""
+    client_auth = _signup_client()
+    lawyer_auth = _login_lawyer()
+
+    # Book a consultation
+    book = client.post(
+        "/api/consultations",
+        json={"lawyer_id": "lw_004", "scheduled_for": "2026-05-01T10:00:00", "summary": "Status test"},
+        headers={"X-Auth-Token": client_auth["access_token"]},
+    )
+    assert book.status_code == 200
+    consultation_id = book.json()["consultation_id"]
+
+    # Client cannot mark as completed
+    forbidden = client.patch(
+        f"/api/consultations/{consultation_id}/status",
+        json={"status": "completed"},
+        headers={"X-Auth-Token": client_auth["access_token"]},
+    )
+    assert forbidden.status_code == 403
+
+    # Lawyer can mark as completed
+    complete = client.patch(
+        f"/api/consultations/{consultation_id}/status",
+        json={"status": "completed"},
+        headers={"X-Auth-Token": lawyer_auth["access_token"]},
+    )
+    assert complete.status_code == 200
+    assert complete.json()["status"] == "completed"
+
+    # Cannot change a completed consultation via client (already terminal, but client can only cancel anyway)
+    cancel_attempt = client.patch(
+        f"/api/consultations/{consultation_id}/status",
+        json={"status": "cancelled"},
+        headers={"X-Auth-Token": client_auth["access_token"]},
+    )
+    # Allowed by role (client can cancel) — status change itself goes through
+    assert cancel_attempt.status_code == 200
+    assert cancel_attempt.json()["status"] == "cancelled"

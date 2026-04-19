@@ -219,10 +219,27 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS kyc_documents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                lawyer_id TEXT NOT NULL,
+                uploaded_by_user_id INTEGER NOT NULL,
+                original_filename TEXT NOT NULL,
+                storage_key TEXT UNIQUE NOT NULL,
+                content_type TEXT NOT NULL,
+                size_bytes INTEGER NOT NULL,
+                created_on TEXT NOT NULL,
+                FOREIGN KEY(lawyer_id) REFERENCES lawyers(id),
+                FOREIGN KEY(uploaded_by_user_id) REFERENCES users(id)
+            )
+            """
+        )
         conn.commit()
     _ensure_sessions_schema()
     _ensure_payments_schema()
     _ensure_users_schema()
+    _ensure_lawyers_schema()
 
 
 def _now() -> datetime:
@@ -353,6 +370,29 @@ def _ensure_users_schema() -> None:
             conn.commit()
 
 
+def _ensure_lawyers_schema() -> None:
+    with connect() as conn:
+        rows = conn.execute("PRAGMA table_info(lawyers)").fetchall()
+        columns = {row["name"] for row in rows}
+        if not columns:
+            return
+
+        alter_statements = []
+        if "enrollment_number" not in columns:
+            alter_statements.append("ALTER TABLE lawyers ADD COLUMN enrollment_number TEXT")
+        if "verification_document_id" not in columns:
+            alter_statements.append("ALTER TABLE lawyers ADD COLUMN verification_document_id INTEGER")
+        if "kyc_submission_status" not in columns:
+            alter_statements.append("ALTER TABLE lawyers ADD COLUMN kyc_submission_status TEXT DEFAULT 'none'")
+        if "nin" not in columns:
+            alter_statements.append("ALTER TABLE lawyers ADD COLUMN nin TEXT")
+
+        for statement in alter_statements:
+            conn.execute(statement)
+        if alter_statements:
+            conn.commit()
+
+
 def _serialize_practice_areas(practice_areas: list[str]) -> str:
     return ",".join(practice_areas)
 
@@ -373,8 +413,9 @@ def seed_lawyers_if_empty() -> None:
                 INSERT INTO lawyers (
                     id, full_name, state, practice_areas, years_called, nin_verified, nba_verified,
                     bvn_verified, profile_completeness, completed_matters, rating, response_rate,
-                    avg_response_hours, repeat_client_rate, base_consult_fee_ngn, active_complaints, severe_flag
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    avg_response_hours, repeat_client_rate, base_consult_fee_ngn, active_complaints, severe_flag,
+                    enrollment_number, verification_document_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     lawyer.id,
@@ -394,6 +435,8 @@ def seed_lawyers_if_empty() -> None:
                     lawyer.base_consult_fee_ngn,
                     lawyer.active_complaints,
                     int(lawyer.severe_flag),
+                    lawyer.enrollment_number,
+                    lawyer.verification_document_id,
                 ),
             )
         conn.commit()
@@ -436,6 +479,10 @@ def row_to_lawyer(row: sqlite3.Row) -> Lawyer:
         base_consult_fee_ngn=row["base_consult_fee_ngn"],
         active_complaints=row["active_complaints"],
         severe_flag=bool(row["severe_flag"]),
+        enrollment_number=row["enrollment_number"] if "enrollment_number" in row.keys() else None,
+        verification_document_id=row["verification_document_id"] if "verification_document_id" in row.keys() else None,
+        kyc_submission_status=row["kyc_submission_status"] if "kyc_submission_status" in row.keys() else "none",
+        nin=row["nin"] if "nin" in row.keys() else None,
     )
 
 
@@ -471,7 +518,11 @@ def save_lawyer(lawyer: Lawyer) -> None:
                 repeat_client_rate = ?,
                 base_consult_fee_ngn = ?,
                 active_complaints = ?,
-                severe_flag = ?
+                severe_flag = ?,
+                enrollment_number = ?,
+                verification_document_id = ?,
+                kyc_submission_status = ?,
+                nin = ?
             WHERE id = ?
             """,
             (
@@ -491,6 +542,10 @@ def save_lawyer(lawyer: Lawyer) -> None:
                 lawyer.base_consult_fee_ngn,
                 lawyer.active_complaints,
                 int(lawyer.severe_flag),
+                lawyer.enrollment_number,
+                lawyer.verification_document_id,
+                lawyer.kyc_submission_status,
+                lawyer.nin,
                 lawyer.id,
             ),
         )
@@ -723,7 +778,7 @@ def refresh_session(refresh_token: str) -> dict[str, Any] | None:
     with connect() as conn:
         row = conn.execute(
             """
-            SELECT sessions.user_id, users.email, users.full_name, users.role, sessions.revoked, sessions.refresh_expires_at
+            SELECT sessions.user_id, users.email, users.full_name, users.role, users.lawyer_id, sessions.revoked, sessions.refresh_expires_at
             FROM sessions
             JOIN users ON users.id = sessions.user_id
             WHERE sessions.refresh_token = ?
@@ -744,6 +799,7 @@ def refresh_session(refresh_token: str) -> dict[str, Any] | None:
         "email": row["email"],
         "full_name": row["full_name"],
         "role": row["role"],
+        "lawyer_id": row["lawyer_id"],
         **token_bundle,
     }
 
@@ -792,6 +848,10 @@ def upsert_kyc_status(
         lawyer.nin_verified = nin_verified
     if nba_verified is not None:
         lawyer.nba_verified = nba_verified
+        if nba_verified:
+            lawyer.kyc_submission_status = "approved"
+        else:
+            lawyer.kyc_submission_status = "rejected"
     if bvn_verified is not None:
         lawyer.bvn_verified = bvn_verified
     save_lawyer(lawyer)
@@ -815,6 +875,8 @@ def upsert_kyc_status(
 
     return {
         "lawyer_id": lawyer.id,
+        "enrollment_number": lawyer.enrollment_number,
+        "kyc_submission_status": lawyer.kyc_submission_status,
         "nin_verified": lawyer.nin_verified,
         "nba_verified": lawyer.nba_verified,
         "bvn_verified": lawyer.bvn_verified,
@@ -842,6 +904,8 @@ def get_latest_kyc_status(lawyer_id: str) -> dict[str, Any] | None:
     if row is None:
         return {
             "lawyer_id": lawyer.id,
+            "enrollment_number": lawyer.enrollment_number,
+            "kyc_submission_status": lawyer.kyc_submission_status,
             "nin_verified": lawyer.nin_verified,
             "nba_verified": lawyer.nba_verified,
             "bvn_verified": lawyer.bvn_verified,
@@ -851,12 +915,80 @@ def get_latest_kyc_status(lawyer_id: str) -> dict[str, Any] | None:
     data = dict(row)
     return {
         "lawyer_id": data["lawyer_id"],
+        "enrollment_number": lawyer.enrollment_number,
+        "kyc_submission_status": lawyer.kyc_submission_status,
         "nin_verified": bool(data["nin_verified"]),
         "nba_verified": bool(data["nba_verified"]),
         "bvn_verified": bool(data["bvn_verified"]),
         "note": data["note"],
         "updated_on": data["updated_on"],
     }
+
+
+def list_pending_kyc_submissions() -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM lawyers WHERE kyc_submission_status = 'pending' ORDER BY id"
+        ).fetchall()
+    results = []
+    for row in rows:
+        lawyer = row_to_lawyer(row)
+        results.append({
+            "lawyer_id": lawyer.id,
+            "full_name": lawyer.full_name,
+            "enrollment_number": lawyer.enrollment_number,
+            "kyc_submission_status": lawyer.kyc_submission_status,
+            "nin_verified": lawyer.nin_verified,
+            "nba_verified": lawyer.nba_verified,
+            "verification_document_id": lawyer.verification_document_id,
+        })
+    return results
+
+
+def create_kyc_document(
+    lawyer_id: str,
+    uploaded_by_user_id: int,
+    original_filename: str,
+    content_type: str,
+    file_bytes: bytes,
+) -> dict[str, Any]:
+    created_on = str(date.today())
+    suffix = Path(original_filename).suffix[:20]
+    storage_key = f"kyc_{token_hex(16)}{suffix}"
+    file_path = UPLOADS_DIR / storage_key
+    file_path.write_bytes(file_bytes)
+
+    with connect() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO kyc_documents (
+                lawyer_id, uploaded_by_user_id, original_filename, storage_key,
+                content_type, size_bytes, created_on
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                lawyer_id,
+                uploaded_by_user_id,
+                original_filename,
+                storage_key,
+                content_type,
+                len(file_bytes),
+                created_on,
+            ),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM kyc_documents WHERE id = ?", (cursor.lastrowid,)).fetchone()
+    return dict(row)
+
+
+def get_kyc_document(document_id: int) -> dict[str, Any] | None:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM kyc_documents WHERE id = ?", (document_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def get_kyc_document_file_path(document: dict[str, Any]) -> Path:
+    return UPLOADS_DIR / document["storage_key"]
 
 
 def create_conversation(client_user_id: int, lawyer_id: str, initial_message: str) -> tuple[dict[str, Any], dict[str, Any]] | None:
@@ -920,6 +1052,25 @@ def list_messages(conversation_id: int) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
+def list_conversations_for_user(user: dict[str, Any]) -> list[dict[str, Any]]:
+    with connect() as conn:
+        if user["role"] == "admin":
+            rows = conn.execute("SELECT * FROM conversations ORDER BY id DESC").fetchall()
+        elif user["role"] == "client":
+            rows = conn.execute(
+                "SELECT * FROM conversations WHERE client_user_id = ? ORDER BY id DESC",
+                (user["id"],),
+            ).fetchall()
+        elif user["role"] == "lawyer":
+            rows = conn.execute(
+                "SELECT * FROM conversations WHERE lawyer_id = ? ORDER BY id DESC",
+                (user.get("lawyer_id"),),
+            ).fetchall()
+        else:
+            rows = []
+    return [dict(row) for row in rows]
+
+
 def user_can_access_conversation(user: dict[str, Any], conversation_id: int) -> bool:
     conversation = get_conversation(conversation_id)
     if conversation is None:
@@ -957,6 +1108,25 @@ def get_consultation(consultation_id: int) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
+def list_consultations_for_user(user: dict[str, Any]) -> list[dict[str, Any]]:
+    with connect() as conn:
+        if user["role"] == "admin":
+            rows = conn.execute("SELECT * FROM consultations ORDER BY id DESC").fetchall()
+        elif user["role"] == "client":
+            rows = conn.execute(
+                "SELECT * FROM consultations WHERE client_user_id = ? ORDER BY id DESC",
+                (user["id"],),
+            ).fetchall()
+        elif user["role"] == "lawyer":
+            rows = conn.execute(
+                "SELECT * FROM consultations WHERE lawyer_id = ? ORDER BY id DESC",
+                (user.get("lawyer_id"),),
+            ).fetchall()
+        else:
+            rows = []
+    return [dict(row) for row in rows]
+
+
 def user_can_access_consultation(user: dict[str, Any], consultation_id: int) -> bool:
     consultation = get_consultation(consultation_id)
     if consultation is None:
@@ -968,6 +1138,15 @@ def user_can_access_consultation(user: dict[str, Any], consultation_id: int) -> 
     if user["role"] == "lawyer":
         return user.get("lawyer_id") == consultation["lawyer_id"]
     return False
+
+
+def update_consultation_status(consultation_id: int, new_status: str) -> dict[str, Any] | None:
+    with connect() as conn:
+        conn.execute(
+            "UPDATE consultations SET status = ? WHERE id = ?",
+            (new_status, consultation_id),
+        )
+    return get_consultation(consultation_id)
 
 
 def create_payment(consultation_id: int, provider: str = "simulation") -> dict[str, Any] | None:

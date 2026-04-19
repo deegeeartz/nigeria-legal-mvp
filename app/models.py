@@ -48,6 +48,10 @@ class Lawyer:
     base_consult_fee_ngn: int
     active_complaints: int
     severe_flag: bool = False
+    enrollment_number: str | None = None
+    verification_document_id: int | None = None
+    kyc_submission_status: str = "none"  # none | pending | approved | rejected
+    nin: str | None = None
 
 
 class IntakeRequest(BaseModel):
@@ -150,6 +154,7 @@ class AuthResponse(BaseModel):
     email: str
     full_name: str
     role: UserRole
+    lawyer_id: str | None = None
     access_token: str
     refresh_token: str
     access_expires_at: str
@@ -169,6 +174,7 @@ class UserProfileResponse(BaseModel):
     email: str
     full_name: str
     role: UserRole
+    lawyer_id: str | None = None
 
 
 class KycVerifyRequest(BaseModel):
@@ -181,6 +187,8 @@ class KycVerifyRequest(BaseModel):
 
 class KycStatusResponse(BaseModel):
     lawyer_id: str
+    enrollment_number: str | None = None
+    kyc_submission_status: str = "none"
     nin_verified: bool
     nba_verified: bool
     bvn_verified: bool
@@ -245,6 +253,10 @@ class ConsultationCreateRequest(BaseModel):
     lawyer_id: str = Field(min_length=3, max_length=40)
     scheduled_for: str = Field(min_length=10, max_length=80)
     summary: str = Field(min_length=10, max_length=2000)
+
+
+class ConsultationStatusUpdateRequest(BaseModel):
+    status: ConsultationStatus
 
 
 class ConsultationResponse(BaseModel):

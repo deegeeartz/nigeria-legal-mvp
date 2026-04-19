@@ -2,7 +2,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.db import force_expire_access_token_for_tests, reset_db_for_tests
-from app.main import app, reset_auth_rate_limits_for_tests
+from app.dependencies import reset_auth_rate_limits_for_tests
+from app.main import app
 
 
 client = TestClient(app)
@@ -193,3 +194,193 @@ def test_refresh_rate_limits_repeated_failed_attempts() -> None:
         json={"refresh_token": bad_token},
     )
     assert blocked.status_code == 429
+
+
+def test_lawyer_can_submit_kyc_and_auto_verify() -> None:
+    """Submit KYC sets status to pending, not auto-verified."""
+    signup = client.post(
+        "/api/auth/signup",
+        json={
+            "email": "auto_verify@example.com",
+            "password": "SecurePass123!",
+            "full_name": "Auto Verify Lawyer",
+            "role": "lawyer",
+            "lawyer_id": "lw_003"
+        },
+    )
+    assert signup.status_code == 200
+    token = signup.json()["access_token"]
+
+    from io import BytesIO
+    fake_cert = BytesIO(b"fake certificate content")
+    submit = client.post(
+        "/api/kyc/submit",
+        headers={"X-Auth-Token": token},
+        data={"enrollment_number": "SCN12345"},
+        files={"certificate_file": ("cert.pdf", fake_cert, "application/pdf")}
+    )
+    assert submit.status_code == 200
+    
+    data = submit.json()
+    assert data["enrollment_number"] == "SCN12345"
+    assert data["kyc_submission_status"] == "pending"
+
+
+def test_admin_approves_pending_kyc() -> None:
+    """Admin can see pending submissions and approve them."""
+    # Lawyer submits KYC
+    signup = client.post(
+        "/api/auth/signup",
+        json={
+            "email": "pending_lawyer@example.com",
+            "password": "SecurePass123!",
+            "full_name": "Pending Lawyer",
+            "role": "lawyer",
+            "lawyer_id": "lw_001"
+        },
+    )
+    assert signup.status_code == 200
+    lawyer_token = signup.json()["access_token"]
+
+    from io import BytesIO
+    fake_cert = BytesIO(b"fake certificate content")
+    submit = client.post(
+        "/api/kyc/submit",
+        headers={"X-Auth-Token": lawyer_token},
+        data={"enrollment_number": "SCN99999"},
+        files={"certificate_file": ("cert.pdf", fake_cert, "application/pdf")}
+    )
+    assert submit.status_code == 200
+    assert submit.json()["kyc_submission_status"] == "pending"
+
+    # Admin logs in and sees pending list
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "admin@legalmvp.local", "password": "AdminPass123!"},
+    )
+    admin_token = login.json()["access_token"]
+
+    pending = client.get("/api/kyc/pending", headers={"X-Auth-Token": admin_token})
+    assert pending.status_code == 200
+    assert any(item["lawyer_id"] == "lw_001" for item in pending.json())
+
+    # Admin approves
+    verify = client.post(
+        "/api/kyc/verify",
+        headers={"X-Auth-Token": admin_token},
+        json={
+            "lawyer_id": "lw_001",
+            "nba_verified": True,
+            "note": "Call to Bar certificate verified manually.",
+        },
+    )
+    assert verify.status_code == 200
+    assert verify.json()["nba_verified"] is True
+    assert verify.json()["kyc_submission_status"] == "approved"
+
+
+def test_lawyer_nin_auto_verification() -> None:
+    """NIN verification is automated — valid 11-digit NIN passes."""
+    signup = client.post(
+        "/api/auth/signup",
+        json={
+            "email": "nin_lawyer@example.com",
+            "password": "SecurePass123!",
+            "full_name": "NIN Lawyer",
+            "role": "lawyer",
+            "lawyer_id": "lw_004"
+        },
+    )
+    assert signup.status_code == 200
+    token = signup.json()["access_token"]
+
+    result = client.post(
+        "/api/kyc/nin/verify",
+        headers={"X-Auth-Token": token},
+        data={"nin": "12345678901"},
+    )
+    assert result.status_code == 200
+    assert result.json()["nin_verified"] is True
+
+    # Invalid NIN
+    result_bad = client.post(
+        "/api/kyc/nin/verify",
+        headers={"X-Auth-Token": token},
+        data={"nin": "SHORT"},
+    )
+    assert result_bad.status_code == 200
+    assert result_bad.json()["nin_verified"] is False
+
+
+def test_auth_responses_include_lawyer_id_for_lawyer_user() -> None:
+    signup = client.post(
+        "/api/auth/signup",
+        json={
+            "email": "lawyer.with.id@example.com",
+            "password": "SecurePass123!",
+            "full_name": "Linked Lawyer",
+            "role": "lawyer",
+            "lawyer_id": "lw_004",
+        },
+    )
+    assert signup.status_code == 200
+    assert signup.json()["lawyer_id"] == "lw_004"
+
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "lawyer.with.id@example.com", "password": "SecurePass123!"},
+    )
+    assert login.status_code == 200
+    assert login.json()["lawyer_id"] == "lw_004"
+
+    refresh = client.post(
+        "/api/auth/refresh",
+        json={"refresh_token": login.json()["refresh_token"]},
+    )
+    assert refresh.status_code == 200
+    assert refresh.json()["lawyer_id"] == "lw_004"
+
+    me = client.get("/api/auth/me", headers={"X-Auth-Token": refresh.json()["access_token"]})
+    assert me.status_code == 200
+    assert me.json()["lawyer_id"] == "lw_004"
+
+
+def test_admin_can_download_submitted_kyc_certificate() -> None:
+    signup = client.post(
+        "/api/auth/signup",
+        json={
+            "email": "kyc.download@example.com",
+            "password": "SecurePass123!",
+            "full_name": "KYC Download Lawyer",
+            "role": "lawyer",
+            "lawyer_id": "lw_003",
+        },
+    )
+    assert signup.status_code == 200
+    lawyer_token = signup.json()["access_token"]
+
+    from io import BytesIO
+
+    fake_cert = BytesIO(b"certificate bytes for download test")
+    submit = client.post(
+        "/api/kyc/submit",
+        headers={"X-Auth-Token": lawyer_token},
+        data={"enrollment_number": "SCN-DOWNLOAD-1"},
+        files={"certificate_file": ("cert.pdf", fake_cert, "application/pdf")},
+    )
+    assert submit.status_code == 200
+
+    admin_login = client.post(
+        "/api/auth/login",
+        json={"email": "admin@legalmvp.local", "password": "AdminPass123!"},
+    )
+    assert admin_login.status_code == 200
+    admin_token = admin_login.json()["access_token"]
+
+    download = client.get(
+        "/api/kyc/lw_003/certificate/download",
+        headers={"X-Auth-Token": admin_token},
+    )
+    assert download.status_code == 200
+    assert download.content == b"certificate bytes for download test"
+
