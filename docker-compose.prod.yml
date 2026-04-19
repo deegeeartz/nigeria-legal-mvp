@@ -1,0 +1,32 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend.prod
+    container_name: nigeria-legal-api-prod
+    environment:
+      APP_DB_PATH: /app/data/legal_mvp.db
+      APP_UPLOADS_DIR: /app/storage/uploads
+    volumes:
+      - api_data:/app/data
+      - api_uploads:/app/storage/uploads
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    container_name: nigeria-legal-frontend-prod
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+volumes:
+  api_data:
+  api_uploads:

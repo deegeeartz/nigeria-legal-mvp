@@ -134,6 +134,82 @@ cd C:\Users\PC\Desktop\nigeria-legal-mvp
 python run.py
 ```
 
+## Containerized Development (Docker)
+
+Use Docker Compose to run both backend and frontend with hot reload while continuing to edit local files.
+
+### Prerequisites
+
+- Docker Desktop (with Compose support)
+
+### Start all services
+
+```powershell
+cd C:\Users\PC\Desktop\nigeria-legal-mvp
+docker compose up --build
+```
+
+### Access apps
+
+- Frontend: `http://localhost:3000`
+- Backend API: `http://localhost:8000`
+- Backend docs: `http://localhost:8000/docs`
+
+### Continue coding while containers run
+
+- Edit files locally in your workspace as usual.
+- Backend reloads automatically via `uvicorn --reload`.
+- Frontend reloads automatically via Next.js dev server.
+
+### Useful commands
+
+```powershell
+cd C:\Users\PC\Desktop\nigeria-legal-mvp
+docker compose ps
+docker compose logs -f api
+docker compose logs -f frontend
+docker compose exec api pytest -q
+docker compose exec frontend npm run lint
+docker compose down
+```
+
+### Container notes
+
+- Compose mounts your source into containers, so code changes are immediate.
+- The frontend service uses `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000`.
+- The backend uses `/app/legal_mvp.db` and `/app/storage/uploads` inside the container.
+
+## Containerized Production-Like Run
+
+Use the production compose file to run closer to deployment behavior (no bind mounts, no dev reload server).
+
+### Start production-like stack
+
+```powershell
+cd C:\Users\PC\Desktop\nigeria-legal-mvp
+docker compose -f docker-compose.prod.yml up --build -d
+```
+
+### Stop production-like stack
+
+```powershell
+cd C:\Users\PC\Desktop\nigeria-legal-mvp
+docker compose -f docker-compose.prod.yml down
+```
+
+### Production-like notes
+
+- Backend image: `Dockerfile.backend.prod` (non-root user, no `--reload`).
+- Frontend image: `frontend/Dockerfile.prod` (multi-stage Next.js build + `next start`).
+- Persistent Docker volumes are used for backend data/uploads:
+  - `api_data`
+  - `api_uploads`
+
+### Working on code while containerized
+
+- For daily development, use `docker-compose.yml` (dev mode, live reload).
+- For deployment checks, use `docker-compose.prod.yml` (production-like runtime).
+
 ## Test
 
 ```powershell
