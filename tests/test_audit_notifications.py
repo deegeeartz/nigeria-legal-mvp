@@ -1,8 +1,12 @@
 import pytest
 from fastapi.testclient import TestClient
+import hashlib
+import hmac
+import json
 
 from app.db import create_user, reset_db_for_tests
 from app.main import app
+from app.settings import PAYSTACK_SECRET_KEY
 
 
 client = TestClient(app)
@@ -132,3 +136,49 @@ def test_paystack_simulation_and_audit_feed() -> None:
     assert "consultation.booked" in actions
     assert "payment.initialized" in actions
     assert "payment.verified" in actions
+
+
+def test_paystack_webhook_requires_valid_signature() -> None:
+    client_auth = _signup_client()
+
+    consultation = client.post(
+        "/api/consultations",
+        headers={"X-Auth-Token": client_auth["access_token"]},
+        json={
+            "lawyer_id": "lw_004",
+            "scheduled_for": "2026-04-05T10:00:00Z",
+            "summary": "Need help reviewing a property agreement.",
+        },
+    )
+    assert consultation.status_code == 200
+    consultation_id = consultation.json()["consultation_id"]
+
+    initialized = client.post(
+        "/api/payments/paystack/initialize",
+        headers={"X-Auth-Token": client_auth["access_token"]},
+        json={"consultation_id": consultation_id, "provider": "paystack"},
+    )
+    assert initialized.status_code == 200
+    payment = initialized.json()
+
+    payload = {
+        "event": "charge.success",
+        "data": {"reference": payment["reference"]},
+    }
+    raw_body = json.dumps(payload).encode("utf-8")
+
+    no_signature = client.post(
+        "/api/payments/webhook",
+        content=raw_body,
+        headers={"Content-Type": "application/json"},
+    )
+    assert no_signature.status_code == 401
+
+    signature = hmac.new(PAYSTACK_SECRET_KEY.encode("utf-8"), raw_body, hashlib.sha512).hexdigest()
+    signed = client.post(
+        "/api/payments/webhook",
+        content=raw_body,
+        headers={"Content-Type": "application/json", "X-Paystack-Signature": signature},
+    )
+    assert signed.status_code == 200
+    assert signed.json()["status"] == "accepted"

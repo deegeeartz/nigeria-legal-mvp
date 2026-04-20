@@ -219,6 +219,32 @@ def test_other_client_cannot_access_consultation_documents() -> None:
     assert denied_download.status_code == 403
 
 
+def test_document_upload_rejects_malware_signature() -> None:
+    client_auth = _signup_client()
+
+    consultation = client.post(
+        "/api/consultations",
+        headers={"X-Auth-Token": client_auth["access_token"]},
+        json={
+            "lawyer_id": "lw_004",
+            "scheduled_for": "2026-04-05T10:00:00Z",
+            "summary": "Need a consultation on tenancy notice and landlord dispute.",
+        },
+    )
+    assert consultation.status_code == 200
+    consultation_id = consultation.json()["consultation_id"]
+
+    eicar = b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
+    upload = client.post(
+        f"/api/consultations/{consultation_id}/documents",
+        headers={"X-Auth-Token": client_auth["access_token"]},
+        data={"document_label": "malware_sample"},
+        files={"file": ("infected.pdf", eicar, "application/pdf")},
+    )
+    assert upload.status_code == 400
+    assert "Malware signature detected" in upload.json()["detail"]
+
+
 def test_list_consultations_and_conversations_for_participants() -> None:
     client_auth = _signup_client()
     lawyer_auth = _login_lawyer()

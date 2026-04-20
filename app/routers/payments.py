@@ -1,6 +1,9 @@
 from fastapi import APIRouter, Header, HTTPException, Request
 from typing import Optional
 from datetime import datetime, UTC
+import hashlib
+import hmac
+import json
 
 from app.dependencies import (
     log_event,
@@ -23,6 +26,14 @@ from app.models import (
     PaystackVerifyRequest,
     PaymentActionRequest,
 )
+from app.settings import PAYSTACK_SECRET_KEY, PAYSTACK_WEBHOOK_ENFORCE_SIGNATURE
+
+
+def _verify_paystack_signature(raw_body: bytes, signature: str | None) -> bool:
+    if not signature:
+        return False
+    computed = hmac.new(PAYSTACK_SECRET_KEY.encode("utf-8"), raw_body, hashlib.sha512).hexdigest()
+    return hmac.compare_digest(computed, signature)
 
 def to_payment_response(payment: dict) -> PaymentResponse:
     return PaymentResponse(
@@ -127,9 +138,18 @@ def simulate_payment_action(
 
 @router.post("/api/payments/webhook")
 async def paystack_webhook(request: Request):
-    # In production, verify X-Paystack-Signature here
+    if PAYSTACK_WEBHOOK_ENFORCE_SIGNATURE:
+        if not PAYSTACK_SECRET_KEY:
+            raise HTTPException(status_code=503, detail="Webhook signature verification is enabled but PAYSTACK_SECRET_KEY is not configured")
+        raw_body = await request.body()
+        signature = request.headers.get("X-Paystack-Signature")
+        if not _verify_paystack_signature(raw_body, signature):
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    else:
+        raw_body = await request.body()
+
     try:
-        payload = await request.json()
+        payload = json.loads(raw_body.decode("utf-8"))
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON")
 

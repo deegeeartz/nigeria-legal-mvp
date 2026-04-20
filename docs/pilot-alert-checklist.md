@@ -26,7 +26,7 @@ Use this checklist for lightweight pilot monitoring and quick incident response.
    - `request_id`
 3. If auth lockouts spike, apply runbook in `docs/pilot-auth-recovery-runbook.md`.
 4. If storage-related failures occur, verify:
-   - `APP_DB_PATH` exists and is writable
+   - PostgreSQL is reachable via `DATABASE_URL`
    - `APP_UPLOADS_DIR` exists and is writable
 5. Trigger backup before any manual remediation.
 

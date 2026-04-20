@@ -23,6 +23,7 @@ from app.models import (
     KycStatusResponse,
     KycVerifyRequest,
 )
+from app.security import scan_upload_for_malware, MalwareDetectedError, MalwareScanError
 
 MAX_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024
 
@@ -61,6 +62,13 @@ async def submit_kyc(
         raise HTTPException(status_code=400, detail="Certificate file is empty")
     if len(file_bytes) > MAX_DOCUMENT_SIZE_BYTES:
         raise HTTPException(status_code=400, detail="Certificate exceeds 10MB limit")
+
+    try:
+        scan_upload_for_malware(file_bytes)
+    except MalwareDetectedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except MalwareScanError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
         
     uploaded = create_kyc_document(
         lawyer_id=lawyer_id,

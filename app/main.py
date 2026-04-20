@@ -15,8 +15,9 @@ from app.db import (
     seed_lawyers_if_empty,
     seed_users_if_empty,
 )
+from app.settings import validate_runtime_configuration
 
-from app.routers import auth, kyc, lawyers, system, messaging, consultations, payments
+from app.routers import auth, kyc, lawyers, system, messaging, consultations, payments, compliance
 
 def _env_int(name: str, default: int) -> int:
     raw_value = os.getenv(name)
@@ -45,6 +46,7 @@ logger = logging.getLogger("legal_mvp")
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    validate_runtime_configuration()
     init_db()
     seed_lawyers_if_empty()
     seed_users_if_empty()
@@ -118,3 +120,4 @@ app.include_router(system.router)
 app.include_router(messaging.router)
 app.include_router(consultations.router)
 app.include_router(payments.router)
+app.include_router(compliance.router)

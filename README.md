@@ -89,7 +89,7 @@ A FastAPI MVP implementing the agreed Nigeria-first legal matching strategy:
 - `app/models.py` - request/response/domain models
 - `app/data.py` - in-memory seed lawyer data
 - `app/ranking.py` - matching, scoring, tiers, and fairness logic
-- `app/db.py` - sqlite persistence, seeding, complaint storage
+- `app/db.py` - PostgreSQL persistence, seeding, complaint storage
 - `app/complaints.py` - complaint severity and trigger rules
 - `tests/test_api.py` - endpoint tests
 - `tests/test_ranking.py` - ranking and policy tests
@@ -115,8 +115,8 @@ Use `.env.example` as the baseline for pilot settings.
 
 Key variables:
 
-- `APP_DB_PATH`
 - `APP_UPLOADS_DIR`
+- `DATABASE_URL`
 - `ACCESS_TOKEN_TTL_MINUTES`
 - `REFRESH_TOKEN_TTL_DAYS`
 - `PASSWORD_HASH_ITERATIONS`
@@ -126,6 +126,14 @@ Key variables:
 - `LOG_LEVEL`
 - `SLOW_REQUEST_MS`
 - `ENABLE_REQUEST_LOGGING`
+
+PostgreSQL readiness variables:
+
+- `POSTGRES_HOST`
+- `POSTGRES_PORT`
+- `POSTGRES_DB`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
 
 ## Run
 
@@ -173,11 +181,25 @@ docker compose exec frontend npm run lint
 docker compose down
 ```
 
+### Run development stack with PostgreSQL sidecar (migration mode)
+
+```powershell
+cd C:\Users\PC\Desktop\nigeria-legal-mvp
+docker compose -f docker-compose.yml -f docker-compose.postgres.yml up --build -d
+docker compose -f docker-compose.yml -f docker-compose.postgres.yml --profile migration run --rm migrate
+.\scripts\container_migration_smoke.ps1 -ApiUrl "http://127.0.0.1:8000"
+```
+
+Notes:
+
+- API runtime is PostgreSQL and requires a valid `DATABASE_URL`.
+- Run schema migration before starting API in new environments.
+
 ### Container notes
 
 - Compose mounts your source into containers, so code changes are immediate.
 - The frontend service uses `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000`.
-- The backend uses `/app/legal_mvp.db` and `/app/storage/uploads` inside the container.
+- The backend uses PostgreSQL via `DATABASE_URL` and stores files in `/app/storage/uploads`.
 
 ## Containerized Production-Like Run
 
@@ -232,8 +254,9 @@ Use these deployment assets:
 ```powershell
 cd C:\Users\PC\Desktop\nigeria-legal-mvp
 pip install -r requirements.txt
+docker compose -f docker-compose.postgres.yml up -d
+alembic upgrade head
 pytest -q
-.\scripts\backup_pilot.ps1 -DbPath "C:\Users\PC\Desktop\nigeria-legal-mvp\pilot_legal_mvp.db" -UploadsDir "C:\Users\PC\Desktop\nigeria-legal-mvp\storage\uploads"
 python run.py
 ```
 
@@ -273,8 +296,7 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/auth/logout -Heade
 
 ## Notes
 
-- This MVP now uses SQLite (`legal_mvp.db`) with startup seeding from `app/data.py`.
-- Pilot strategy: keep SQLite for first-wave users, then migrate to PostgreSQL before scale-out.
+- This MVP now uses PostgreSQL with startup seeding from `app/data.py`.
 - The badge/tier guardrail is enforced in responses:
   - "Ranking reflects platform performance and verification signals. It is not an official NBA or government ranking."
 - Consultation documents are stored in `storage/uploads` and are limited to 10MB per file.
@@ -282,32 +304,16 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/auth/logout -Heade
 - Sensitive actions are captured in audit events and accessible through `GET /api/audit-events` (admin-only).
 - Payment flow now uses a Paystack-style simulation contract (`initialize` + `verify`) while keeping simulation safety for MVP.
 
-## Pilot DB Mode (SQLite)
+## PostgreSQL Operations
 
-Use SQLite for pilot testing while product, onboarding, and workflows are still changing.
+Use PostgreSQL in all environments (local, staging, production-like).
 
-### Recommended pilot guardrails
+### Recommended guardrails
 
-- Run a single app instance per environment (SQLite file locking is not ideal for multi-instance writes).
-- Keep daily backups of `legal_mvp.db` and `storage/uploads`.
-- Use `APP_DB_PATH` to isolate environments (dev, staging, pilot).
+- Run `alembic upgrade head` before API startup in new environments.
+- Keep regular PostgreSQL backups (for example, scheduled `pg_dump` jobs).
 - Monitor write-heavy operations (`messages`, `payments`, `notifications`) for latency spikes.
-
-### Example pilot run with explicit DB path
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-$env:APP_DB_PATH = "C:\Users\PC\Desktop\nigeria-legal-mvp\pilot_legal_mvp.db"
-python run.py
-```
-
-### Pilot backup routine (database + uploads)
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-.
-\scripts\backup_pilot.ps1 -DbPath "C:\Users\PC\Desktop\nigeria-legal-mvp\pilot_legal_mvp.db" -UploadsDir "C:\Users\PC\Desktop\nigeria-legal-mvp\storage\uploads"
-```
+- Keep `APP_UPLOADS_DIR` backups aligned with database backup snapshots.
 
 ### Auth lockout recovery
 
@@ -320,16 +326,69 @@ If users hit repeated auth `429` responses during pilot, follow `docs/pilot-auth
 - Unhandled request exceptions are logged as `event=request_error`.
 - Use `docs/pilot-alert-checklist.md` for lightweight pilot alerting and operator response.
 
-## Migration Trigger (SQLite -> PostgreSQL)
+## PostgreSQL Baseline
 
-Plan migration when any of these conditions hold for more than a short period:
+Migration from SQLite is now complete for runtime. Use `docs/postgres-setup.md` as the baseline setup runbook.
 
-- Concurrent active users are consistently above pilot expectations.
-- You need multi-instance app deployment (horizontal scaling).
-- Write contention/latency appears in production-like traffic.
-- You need stronger operational tooling (replication, managed backups, richer analytics queries).
+## PostgreSQL Readiness
 
-Use the phased runbook in `docs/db-migration-plan.md`.
+PostgreSQL tooling is now scaffolded for schema management, local provisioning, and runtime configuration via `DATABASE_URL`.
+
+Included assets:
+
+- `app/settings.py`
+- `alembic.ini`
+- `alembic/env.py`
+- `alembic/versions/20260420_0001_initial_schema.py`
+- `docker-compose.postgres.yml`
+- `scripts/postgres_smoke.py`
+- `docs/postgres-setup.md`
+
+### Start local PostgreSQL
+
+```powershell
+cd C:\Users\PC\Desktop\nigeria-legal-mvp
+docker compose -f docker-compose.postgres.yml up -d
+```
+
+### Set PostgreSQL connection URL
+
+```powershell
+cd C:\Users\PC\Desktop\nigeria-legal-mvp
+$env:DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/nigeria_legal_mvp"
+```
+
+### Run schema migration against PostgreSQL
+
+```powershell
+cd C:\Users\PC\Desktop\nigeria-legal-mvp
+alembic upgrade head
+```
+
+### Switch API runtime to PostgreSQL
+
+```powershell
+cd C:\Users\PC\Desktop\nigeria-legal-mvp
+$env:DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/nigeria_legal_mvp"
+python run.py
+```
+
+If startup reports missing PostgreSQL schema tables, run migrations and retry startup:
+
+```powershell
+cd C:\Users\PC\Desktop\nigeria-legal-mvp
+alembic upgrade head
+python run.py
+```
+
+### Verify PostgreSQL connectivity
+
+```powershell
+cd C:\Users\PC\Desktop\nigeria-legal-mvp
+c:/python313/python.exe scripts/postgres_smoke.py
+```
+
+See `docs/postgres-setup.md` for the step-by-step workflow and current limitation notes.
 
 ## Implementation Tracker
 

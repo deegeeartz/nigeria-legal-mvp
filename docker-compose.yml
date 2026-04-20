@@ -7,7 +7,7 @@ services:
     working_dir: /app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     environment:
-      APP_DB_PATH: /app/legal_mvp.db
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@postgres:5432/nigeria_legal_mvp}
       APP_UPLOADS_DIR: /app/storage/uploads
     volumes:
       - ./:/app

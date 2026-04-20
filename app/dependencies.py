@@ -1,39 +1,122 @@
 from uuid import uuid4
-from time import monotonic
+from time import time
 from threading import Lock
+import logging
 from fastapi import HTTPException
 from app.db import (
     get_user_by_access_token,
     create_audit_event,
     create_notification,
 )
+from app.settings import (
+    AUTH_RATE_LIMIT_WINDOW_SECONDS,
+    LOGIN_FAILURE_LIMIT,
+    REFRESH_FAILURE_LIMIT,
+    RATE_LIMIT_BACKEND,
+    REDIS_URL,
+)
 
-AUTH_RATE_LIMIT_WINDOW_SECONDS = 60
-LOGIN_FAILURE_LIMIT = 5
-REFRESH_FAILURE_LIMIT = 8
+try:
+    import redis
+except Exception:  # pragma: no cover - optional dependency fallback
+    redis = None
+
+logger = logging.getLogger("legal_mvp")
 
 _failed_login_attempts: dict[str, list[float]] = {}
 _failed_refresh_attempts: dict[str, list[float]] = {}
 _auth_rate_lock = Lock()
+_redis_client = None
+_redis_unavailable_logged = False
+
+
+def _store_prefix(store: dict[str, list[float]]) -> str:
+    if store is _failed_login_attempts:
+        return "login"
+    if store is _failed_refresh_attempts:
+        return "refresh"
+    return "generic"
+
+
+def _build_rate_limit_key(prefix: str, key: str) -> str:
+    return f"rate_limit:{prefix}:{key}"
+
+
+def _use_redis_backend() -> bool:
+    if RATE_LIMIT_BACKEND == "memory":
+        return False
+    if RATE_LIMIT_BACKEND == "redis":
+        return True
+    return bool(REDIS_URL)
+
+
+def _get_redis_client():
+    global _redis_client, _redis_unavailable_logged
+    if not _use_redis_backend():
+        return None
+    if redis is None:
+        if not _redis_unavailable_logged:
+            logger.warning("Redis backend configured but redis package is unavailable; falling back to memory rate limits")
+            _redis_unavailable_logged = True
+        return None
+    if _redis_client is not None:
+        return _redis_client
+    try:
+        _redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=False)
+        _redis_client.ping()
+        return _redis_client
+    except Exception:
+        if not _redis_unavailable_logged:
+            logger.warning("Redis backend unavailable; falling back to memory rate limits")
+            _redis_unavailable_logged = True
+        return None
 
 def _rate_limit_key(raw_value: str) -> str:
     return raw_value.strip().lower()
 
 def _is_rate_limited(store: dict[str, list[float]], key: str, limit: int) -> bool:
-    now = monotonic()
+    redis_client = _get_redis_client()
+    now = time()
+    if redis_client is not None:
+        redis_key = _build_rate_limit_key(_store_prefix(store), key)
+        window_start = now - AUTH_RATE_LIMIT_WINDOW_SECONDS
+        pipeline = redis_client.pipeline()
+        pipeline.zremrangebyscore(redis_key, 0, window_start)
+        pipeline.zcard(redis_key)
+        pipeline.expire(redis_key, AUTH_RATE_LIMIT_WINDOW_SECONDS + 5)
+        _, count, _ = pipeline.execute()
+        return int(count) >= limit
+
     with _auth_rate_lock:
         attempts = [value for value in store.get(key, []) if now - value < AUTH_RATE_LIMIT_WINDOW_SECONDS]
         store[key] = attempts
         return len(attempts) >= limit
 
 def _record_failed_attempt(store: dict[str, list[float]], key: str) -> None:
-    now = monotonic()
+    redis_client = _get_redis_client()
+    now = time()
+    if redis_client is not None:
+        redis_key = _build_rate_limit_key(_store_prefix(store), key)
+        member = f"{now}:{uuid4().hex}".encode("utf-8")
+        pipeline = redis_client.pipeline()
+        pipeline.zadd(redis_key, {member: now})
+        pipeline.zremrangebyscore(redis_key, 0, now - AUTH_RATE_LIMIT_WINDOW_SECONDS)
+        pipeline.expire(redis_key, AUTH_RATE_LIMIT_WINDOW_SECONDS + 5)
+        pipeline.execute()
+        return
+
     with _auth_rate_lock:
         attempts = [value for value in store.get(key, []) if now - value < AUTH_RATE_LIMIT_WINDOW_SECONDS]
         attempts.append(now)
         store[key] = attempts
 
 def _clear_failed_attempts(store: dict[str, list[float]], key: str) -> None:
+    redis_client = _get_redis_client()
+    if redis_client is not None:
+        redis_key = _build_rate_limit_key(_store_prefix(store), key)
+        redis_client.delete(redis_key)
+        return
+
     with _auth_rate_lock:
         store.pop(key, None)
 

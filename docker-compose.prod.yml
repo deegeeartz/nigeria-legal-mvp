@@ -5,10 +5,9 @@ services:
       dockerfile: Dockerfile.backend.prod
     container_name: nigeria-legal-api-prod
     environment:
-      APP_DB_PATH: /app/data/legal_mvp.db
+      DATABASE_URL: ${DATABASE_URL}
       APP_UPLOADS_DIR: /app/storage/uploads
     volumes:
-      - api_data:/app/data
       - api_uploads:/app/storage/uploads
     ports:
       - "8000:8000"
@@ -28,5 +27,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  api_data:
   api_uploads:

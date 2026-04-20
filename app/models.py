@@ -355,3 +355,179 @@ class ConsultationNoteResponse(BaseModel):
     is_private: bool
     created_on: str
 
+
+class ConsentEventCreateRequest(BaseModel):
+    purpose: str = Field(min_length=3, max_length=120)
+    lawful_basis: str = Field(min_length=3, max_length=120)
+    consented: bool
+    policy_version: str = Field(min_length=1, max_length=40)
+    metadata: dict | None = None
+
+
+class ConsentEventResponse(BaseModel):
+    consent_event_id: int
+    user_id: int
+    purpose: str
+    lawful_basis: str
+    consented: bool
+    policy_version: str
+    metadata_json: str | None = None
+    created_on: str
+
+
+class DsrRequestCreateRequest(BaseModel):
+    request_type: str = Field(pattern="^(access|correction|deletion|portability|restriction)$")
+    detail: str = Field(min_length=5, max_length=2000)
+
+
+class DsrRequestStatusUpdateRequest(BaseModel):
+    status: str = Field(pattern="^(in_review|completed|rejected)$")
+    resolution_note: str = Field(min_length=3, max_length=500)
+
+
+class DsrRequestResponse(BaseModel):
+    dsr_request_id: int
+    user_id: int
+    request_type: str
+    status: str
+    detail: str
+    created_on: str
+    updated_on: str
+    resolved_on: str | None = None
+    resolution_note: str | None = None
+    resolved_by_user_id: int | None = None
+
+
+class DsrDeletionExecuteRequest(BaseModel):
+    resolution_note: str = Field(min_length=3, max_length=500)
+
+
+class DsrDeletionExecuteResponse(BaseModel):
+    dsr_request_id: int
+    user_id: int
+    status: str
+    anonymized_email: str
+    redacted_messages: int
+    redacted_notes: int
+    deleted_notifications: int
+    revoked_sessions: int
+    executed_on: str
+
+
+class DsrExportResponse(BaseModel):
+    dsr_request: dict
+    user_profile: dict
+    consent_events: list[dict]
+    dsr_history: list[dict]
+    data_summary: dict
+    generated_on: str
+
+
+class DsrCorrectionCreateRequest(BaseModel):
+    field_name: str = Field(pattern="^(full_name|email)$")
+    requested_value: str = Field(min_length=2, max_length=200)
+    justification: str = Field(min_length=5, max_length=2000)
+    evidence: str | None = Field(default=None, max_length=2000)
+
+
+class DsrCorrectionReviewRequest(BaseModel):
+    status: str = Field(pattern="^(approved|rejected)$")
+    review_note: str = Field(min_length=3, max_length=500)
+
+
+class DsrCorrectionResponse(BaseModel):
+    correction_id: int
+    dsr_request_id: int
+    user_id: int
+    field_name: str
+    current_value: str | None = None
+    requested_value: str
+    justification: str
+    evidence: str | None = None
+    status: str
+    review_note: str | None = None
+    reviewed_by_user_id: int | None = None
+    reviewed_on: str | None = None
+    created_on: str
+    updated_on: str
+
+
+class BreachIncidentCreateRequest(BaseModel):
+    title: str = Field(min_length=5, max_length=200)
+    severity: str = Field(pattern="^(low|medium|high|critical)$")
+    description: str = Field(min_length=10, max_length=4000)
+    impact_summary: str | None = Field(default=None, max_length=2000)
+    affected_data_types: str | None = Field(default=None, max_length=1000)
+    affected_records: int | None = Field(default=None, ge=0)
+    occurred_on: str | None = Field(default=None, min_length=10, max_length=50)
+    detected_on: str = Field(min_length=10, max_length=50)
+
+
+class BreachIncidentUpdateRequest(BaseModel):
+    status: str = Field(pattern="^(open|investigating|contained|resolved)$")
+    impact_summary: str | None = Field(default=None, max_length=2000)
+    affected_records: int | None = Field(default=None, ge=0)
+    reported_to_ndpc: bool | None = None
+    ndpc_reported_on: str | None = Field(default=None, min_length=10, max_length=50)
+    contained_on: str | None = Field(default=None, min_length=10, max_length=50)
+    resolved_on: str | None = Field(default=None, min_length=10, max_length=50)
+    resolution_note: str | None = Field(default=None, max_length=1000)
+
+
+class BreachIncidentResponse(BaseModel):
+    breach_incident_id: int
+    title: str
+    severity: str
+    status: str
+    description: str
+    impact_summary: str | None = None
+    affected_data_types: str | None = None
+    affected_records: int | None = None
+    occurred_on: str | None = None
+    detected_on: str
+    reported_to_ndpc: bool
+    ndpc_reported_on: str | None = None
+    contained_on: str | None = None
+    resolved_on: str | None = None
+    resolution_note: str | None = None
+    notification_deadline: str | None = None
+    escalation_triggered: bool
+    escalation_triggered_at: str | None = None
+    sla_status: str | None = None
+    days_until_deadline: int | None = None
+    created_by_user_id: int
+    updated_by_user_id: int
+    created_on: str
+    updated_on: str
+
+
+class RetentionRunRequest(BaseModel):
+    retention_days: int = Field(ge=1, le=3650, default=180)
+    dry_run: bool = True
+
+
+
+
+class RetentionRunResponse(BaseModel):
+    retention_days: int
+    dry_run: bool
+    deleted_notifications: int
+    deleted_audit_events: int
+    deleted_expired_sessions: int
+    executed_on: str
+
+
+class BreachSlaStatusResponse(BaseModel):
+    """Status of breach SLA compliance (NDPA 72-hour notification deadline)."""
+    breach_incident_id: int
+    title: str
+    severity: str
+    status: str
+    detected_on: str
+    notification_deadline: str | None
+    days_until_deadline: int | None
+    sla_status: str  # "on-track", "at-risk" (< 24h), "overdue", "notified"
+    escalation_triggered: bool
+    reported_to_ndpc: bool
+
+

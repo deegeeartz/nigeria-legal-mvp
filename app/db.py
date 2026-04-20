@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-import sqlite3
+import re
 from hashlib import pbkdf2_hmac, sha256
 from secrets import token_hex
 import secrets
@@ -9,264 +9,166 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import IntegrityError as SQLAlchemyIntegrityError
+
 from app.complaints import apply_open_complaint_trigger, apply_resolution_trigger, complaint_severity
 from app.data import SEED_LAWYERS
 from app.models import ComplaintCategory, Lawyer
+from app.settings import DATABASE_URL
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DB_PATH = Path(os.getenv("APP_DB_PATH", str(BASE_DIR / "legal_mvp.db")))
 UPLOADS_DIR = Path(os.getenv("APP_UPLOADS_DIR", str(BASE_DIR / "storage" / "uploads")))
 ACCESS_TOKEN_TTL_MINUTES = int(os.getenv("ACCESS_TOKEN_TTL_MINUTES", "60"))
 REFRESH_TOKEN_TTL_DAYS = int(os.getenv("REFRESH_TOKEN_TTL_DAYS", "30"))
 PASSWORD_HASH_ITERATIONS = int(os.getenv("PASSWORD_HASH_ITERATIONS", "260000"))
+ENGINE = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
 
 
-def connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+class QueryResultAdapter:
+    def __init__(self, result: Any, lastrowid: int | None = None):
+        self._result = result
+        self.lastrowid = lastrowid
+
+    @staticmethod
+    def _to_mapping(row: Any) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        if isinstance(row, dict):
+            return row
+        if hasattr(row, "_mapping"):
+            return dict(row._mapping)
+        return dict(row)
+
+    def fetchone(self) -> dict[str, Any] | None:
+        return self._to_mapping(self._result.fetchone())
+
+    def fetchall(self) -> list[dict[str, Any]]:
+        rows = self._result.fetchall()
+        return [self._to_mapping(row) for row in rows if row is not None]
+
+    @property
+    def rowcount(self) -> int:
+        return self._result.rowcount
+
+
+def _convert_qmark_sql(sql: str, params: tuple[Any, ...] | list[Any]) -> tuple[str, dict[str, Any]]:
+    placeholder_count = sql.count("?")
+    if placeholder_count == 0:
+        return sql, {}
+    if placeholder_count != len(params):
+        raise ValueError(f"Placeholder count mismatch. SQL has {placeholder_count} placeholders, got {len(params)} params")
+
+    chunks = sql.split("?")
+    converted = chunks[0]
+    binds: dict[str, Any] = {}
+    for index, value in enumerate(params):
+        key = f"p{index}"
+        converted += f":{key}{chunks[index + 1]}"
+        binds[key] = value
+    return converted, binds
+
+
+class PostgresConnectionAdapter:
+    def __init__(self):
+        if ENGINE is None:
+            raise RuntimeError("PostgreSQL engine is not configured")
+        self._conn = ENGINE.connect()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if exc_type is not None:
+            self._conn.rollback()
+        else:
+            self._conn.commit()
+        self._conn.close()
+
+    def execute(self, sql: str, params: tuple[Any, ...] | list[Any] = ()) -> QueryResultAdapter:
+        id_returning_tables = {
+            "complaints",
+            "kyc_events",
+            "kyc_documents",
+            "conversations",
+            "messages",
+            "consultations",
+            "payments",
+            "documents",
+            "consultation_milestones",
+            "consultation_notes",
+            "audit_events",
+            "notifications",
+            "consent_events",
+            "dsr_requests",
+            "dsr_corrections",
+            "breach_incidents",
+        }
+
+        converted_sql, bind_params = _convert_qmark_sql(sql, list(params))
+        executable_sql = converted_sql
+
+        lowered = converted_sql.lstrip().lower()
+        if lowered.startswith("insert") and "returning" not in lowered:
+            match = re.search(r"insert\s+into\s+([a-zA-Z_][a-zA-Z0-9_]*)", lowered)
+            table_name = match.group(1) if match else None
+            if table_name in id_returning_tables:
+                executable_sql = f"{converted_sql} RETURNING id"
+
+        result = self._conn.execute(text(executable_sql), bind_params)
+        lastrowid = None
+        if lowered.startswith("insert"):
+            try:
+                returned = result.fetchone()
+                if returned is not None and hasattr(returned, "_mapping") and "id" in returned._mapping:
+                    lastrowid = returned._mapping["id"]
+            except Exception:
+                lastrowid = None
+        return QueryResultAdapter(result, lastrowid=lastrowid)
+
+    def commit(self) -> None:
+        self._conn.commit()
+
+
+def _assert_postgres_schema_ready() -> None:
+    if ENGINE is None:
+        raise RuntimeError("PostgreSQL engine is not configured")
+    with ENGINE.connect() as conn:
+        required_tables = {
+            "users",
+            "lawyers",
+            "sessions",
+            "consultations",
+            "payments",
+            "consent_events",
+            "dsr_requests",
+                "dsr_corrections",
+                "breach_incidents",
+        }
+        rows = conn.execute(
+            text("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
+        ).fetchall()
+        available = {row[0] for row in rows}
+        missing = required_tables - available
+        if missing:
+            joined = ", ".join(sorted(missing))
+            raise RuntimeError(
+                f"PostgreSQL schema is incomplete (missing: {joined}). Run 'alembic upgrade head' before starting the API."
+            )
+
+
+def _db_bool(value: bool) -> bool:
+    return bool(value)
+
+
+def connect() -> PostgresConnectionAdapter:
+    return PostgresConnectionAdapter()
 
 
 def init_db() -> None:
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    with connect() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS lawyers (
-                id TEXT PRIMARY KEY,
-                full_name TEXT NOT NULL,
-                state TEXT NOT NULL,
-                practice_areas TEXT NOT NULL,
-                years_called INTEGER NOT NULL,
-                nin_verified INTEGER NOT NULL,
-                nba_verified INTEGER NOT NULL,
-                bvn_verified INTEGER NOT NULL,
-                profile_completeness INTEGER NOT NULL,
-                completed_matters INTEGER NOT NULL,
-                rating REAL NOT NULL,
-                response_rate INTEGER NOT NULL,
-                avg_response_hours REAL NOT NULL,
-                repeat_client_rate INTEGER NOT NULL,
-                base_consult_fee_ngn INTEGER NOT NULL,
-                active_complaints INTEGER NOT NULL,
-                severe_flag INTEGER NOT NULL
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS complaints (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                lawyer_id TEXT NOT NULL,
-                category TEXT NOT NULL,
-                severity TEXT NOT NULL,
-                status TEXT NOT NULL,
-                details TEXT NOT NULL,
-                created_on TEXT NOT NULL,
-                resolved_on TEXT,
-                resolution_note TEXT,
-                FOREIGN KEY(lawyer_id) REFERENCES lawyers(id)
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                email TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                full_name TEXT NOT NULL,
-                role TEXT NOT NULL,
-                lawyer_id TEXT,
-                created_on TEXT NOT NULL
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS sessions (
-                access_token TEXT PRIMARY KEY,
-                refresh_token TEXT UNIQUE NOT NULL,
-                user_id INTEGER NOT NULL,
-                created_on TEXT NOT NULL,
-                access_expires_at TEXT NOT NULL,
-                refresh_expires_at TEXT NOT NULL,
-                revoked INTEGER NOT NULL DEFAULT 0,
-                FOREIGN KEY(user_id) REFERENCES users(id)
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS kyc_events (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                lawyer_id TEXT NOT NULL,
-                nin_verified INTEGER NOT NULL,
-                nba_verified INTEGER NOT NULL,
-                bvn_verified INTEGER NOT NULL,
-                note TEXT NOT NULL,
-                updated_on TEXT NOT NULL,
-                FOREIGN KEY(lawyer_id) REFERENCES lawyers(id)
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS conversations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                client_user_id INTEGER NOT NULL,
-                lawyer_id TEXT NOT NULL,
-                status TEXT NOT NULL,
-                created_on TEXT NOT NULL,
-                FOREIGN KEY(client_user_id) REFERENCES users(id),
-                FOREIGN KEY(lawyer_id) REFERENCES lawyers(id)
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                conversation_id INTEGER NOT NULL,
-                sender_user_id INTEGER NOT NULL,
-                body TEXT NOT NULL,
-                created_on TEXT NOT NULL,
-                FOREIGN KEY(conversation_id) REFERENCES conversations(id),
-                FOREIGN KEY(sender_user_id) REFERENCES users(id)
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS consultations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                client_user_id INTEGER NOT NULL,
-                lawyer_id TEXT NOT NULL,
-                scheduled_for TEXT NOT NULL,
-                summary TEXT NOT NULL,
-                status TEXT NOT NULL,
-                created_on TEXT NOT NULL,
-                FOREIGN KEY(client_user_id) REFERENCES users(id),
-                FOREIGN KEY(lawyer_id) REFERENCES lawyers(id)
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS payments (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                consultation_id INTEGER NOT NULL,
-                reference TEXT UNIQUE NOT NULL,
-                provider TEXT NOT NULL,
-                amount_ngn INTEGER NOT NULL,
-                status TEXT NOT NULL,
-                created_on TEXT NOT NULL,
-                access_code TEXT,
-                authorization_url TEXT,
-                gateway_status TEXT,
-                paid_on TEXT,
-                released_on TEXT,
-                FOREIGN KEY(consultation_id) REFERENCES consultations(id)
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS documents (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                consultation_id INTEGER NOT NULL,
-                uploaded_by_user_id INTEGER NOT NULL,
-                document_label TEXT NOT NULL,
-                original_filename TEXT NOT NULL,
-                storage_key TEXT UNIQUE NOT NULL,
-                content_type TEXT NOT NULL,
-                size_bytes INTEGER NOT NULL,
-                created_on TEXT NOT NULL,
-                FOREIGN KEY(consultation_id) REFERENCES consultations(id),
-                FOREIGN KEY(uploaded_by_user_id) REFERENCES users(id)
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS consultation_milestones (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                consultation_id INTEGER NOT NULL,
-                event_name TEXT NOT NULL,
-                status_label TEXT,
-                description TEXT,
-                created_on TEXT NOT NULL,
-                FOREIGN KEY(consultation_id) REFERENCES consultations(id)
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS consultation_notes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                consultation_id INTEGER NOT NULL,
-                author_user_id INTEGER NOT NULL,
-                body TEXT NOT NULL,
-                is_private INTEGER NOT NULL DEFAULT 0,
-                created_on TEXT NOT NULL,
-                FOREIGN KEY(consultation_id) REFERENCES consultations(id),
-                FOREIGN KEY(author_user_id) REFERENCES users(id)
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS audit_events (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                actor_user_id INTEGER,
-                action TEXT NOT NULL,
-                resource_type TEXT NOT NULL,
-                resource_id TEXT,
-                detail TEXT NOT NULL,
-                created_on TEXT NOT NULL,
-                FOREIGN KEY(actor_user_id) REFERENCES users(id)
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS notifications (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                kind TEXT NOT NULL,
-                title TEXT NOT NULL,
-                body TEXT NOT NULL,
-                resource_type TEXT NOT NULL,
-                resource_id TEXT,
-                is_read INTEGER NOT NULL DEFAULT 0,
-                created_on TEXT NOT NULL,
-                read_on TEXT,
-                FOREIGN KEY(user_id) REFERENCES users(id)
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS kyc_documents (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                lawyer_id TEXT NOT NULL,
-                uploaded_by_user_id INTEGER NOT NULL,
-                original_filename TEXT NOT NULL,
-                storage_key TEXT UNIQUE NOT NULL,
-                content_type TEXT NOT NULL,
-                size_bytes INTEGER NOT NULL,
-                created_on TEXT NOT NULL,
-                FOREIGN KEY(lawyer_id) REFERENCES lawyers(id),
-                FOREIGN KEY(uploaded_by_user_id) REFERENCES users(id)
-            )
-            """
-        )
-        conn.commit()
-    _ensure_sessions_schema()
-    _ensure_payments_schema()
-    _ensure_users_schema()
-    _ensure_lawyers_schema()
+    _assert_postgres_schema_ready()
 
 
 def _now() -> datetime:
@@ -279,145 +181,6 @@ def _iso(value: datetime) -> str:
 
 def _parse(value: str) -> datetime:
     return datetime.fromisoformat(value)
-
-
-def _ensure_sessions_schema() -> None:
-    with connect() as conn:
-        rows = conn.execute("PRAGMA table_info(sessions)").fetchall()
-        columns = {row["name"] for row in rows}
-        if not columns:
-            return
-
-        if "access_token" not in columns and "token" in columns:
-            conn.execute("ALTER TABLE sessions RENAME TO sessions_legacy")
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS sessions (
-                    access_token TEXT PRIMARY KEY,
-                    refresh_token TEXT UNIQUE NOT NULL,
-                    user_id INTEGER NOT NULL,
-                    created_on TEXT NOT NULL,
-                    access_expires_at TEXT NOT NULL,
-                    refresh_expires_at TEXT NOT NULL,
-                    revoked INTEGER NOT NULL DEFAULT 0,
-                    FOREIGN KEY(user_id) REFERENCES users(id)
-                )
-                """
-            )
-            now = _now()
-            access_exp = _iso(now + timedelta(minutes=ACCESS_TOKEN_TTL_MINUTES))
-            refresh_exp = _iso(now + timedelta(days=REFRESH_TOKEN_TTL_DAYS))
-            legacy_rows = conn.execute("SELECT * FROM sessions_legacy").fetchall()
-            for row in legacy_rows:
-                conn.execute(
-                    """
-                    INSERT INTO sessions (access_token, refresh_token, user_id, created_on, access_expires_at, refresh_expires_at, revoked)
-                    VALUES (?, ?, ?, ?, ?, ?, 0)
-                    """,
-                    (
-                        row["token"],
-                        token_hex(24),
-                        row["user_id"],
-                        row["created_on"],
-                        access_exp,
-                        refresh_exp,
-                    ),
-                )
-            conn.execute("DROP TABLE sessions_legacy")
-            conn.commit()
-            return
-
-        alter_statements = []
-        if "refresh_token" not in columns:
-            alter_statements.append("ALTER TABLE sessions ADD COLUMN refresh_token TEXT")
-        if "access_expires_at" not in columns:
-            alter_statements.append("ALTER TABLE sessions ADD COLUMN access_expires_at TEXT")
-        if "refresh_expires_at" not in columns:
-            alter_statements.append("ALTER TABLE sessions ADD COLUMN refresh_expires_at TEXT")
-        if "revoked" not in columns:
-            alter_statements.append("ALTER TABLE sessions ADD COLUMN revoked INTEGER NOT NULL DEFAULT 0")
-
-        for statement in alter_statements:
-            conn.execute(statement)
-
-        if alter_statements:
-            now = _now()
-            conn.execute(
-                "UPDATE sessions SET refresh_token = COALESCE(refresh_token, ?) WHERE refresh_token IS NULL",
-                (token_hex(24),),
-            )
-            conn.execute(
-                "UPDATE sessions SET access_expires_at = COALESCE(access_expires_at, ?) WHERE access_expires_at IS NULL",
-                (_iso(now + timedelta(minutes=ACCESS_TOKEN_TTL_MINUTES)),),
-            )
-            conn.execute(
-                "UPDATE sessions SET refresh_expires_at = COALESCE(refresh_expires_at, ?) WHERE refresh_expires_at IS NULL",
-                (_iso(now + timedelta(days=REFRESH_TOKEN_TTL_DAYS)),),
-            )
-            conn.commit()
-
-
-def _ensure_payments_schema() -> None:
-    with connect() as conn:
-        rows = conn.execute("PRAGMA table_info(payments)").fetchall()
-        columns = {row["name"] for row in rows}
-        if not columns:
-            return
-
-        alter_statements = []
-        if "access_code" not in columns:
-            alter_statements.append("ALTER TABLE payments ADD COLUMN access_code TEXT")
-        if "authorization_url" not in columns:
-            alter_statements.append("ALTER TABLE payments ADD COLUMN authorization_url TEXT")
-        if "gateway_status" not in columns:
-            alter_statements.append("ALTER TABLE payments ADD COLUMN gateway_status TEXT")
-        if "paid_on" not in columns:
-            alter_statements.append("ALTER TABLE payments ADD COLUMN paid_on TEXT")
-
-        for statement in alter_statements:
-            conn.execute(statement)
-        if alter_statements:
-            conn.commit()
-
-
-def _ensure_users_schema() -> None:
-    with connect() as conn:
-        rows = conn.execute("PRAGMA table_info(users)").fetchall()
-        columns = {row["name"] for row in rows}
-        if not columns:
-            return
-
-        alter_statements = []
-        if "lawyer_id" not in columns:
-            alter_statements.append("ALTER TABLE users ADD COLUMN lawyer_id TEXT")
-
-        for statement in alter_statements:
-            conn.execute(statement)
-        if alter_statements:
-            conn.commit()
-
-
-def _ensure_lawyers_schema() -> None:
-    with connect() as conn:
-        rows = conn.execute("PRAGMA table_info(lawyers)").fetchall()
-        columns = {row["name"] for row in rows}
-        if not columns:
-            return
-
-        alter_statements = []
-        if "enrollment_number" not in columns:
-            alter_statements.append("ALTER TABLE lawyers ADD COLUMN enrollment_number TEXT")
-        if "verification_document_id" not in columns:
-            alter_statements.append("ALTER TABLE lawyers ADD COLUMN verification_document_id INTEGER")
-        if "kyc_submission_status" not in columns:
-            alter_statements.append("ALTER TABLE lawyers ADD COLUMN kyc_submission_status TEXT DEFAULT 'none'")
-        if "nin" not in columns:
-            alter_statements.append("ALTER TABLE lawyers ADD COLUMN nin TEXT")
-
-        for statement in alter_statements:
-            conn.execute(statement)
-        if alter_statements:
-            conn.commit()
 
 
 def _serialize_practice_areas(practice_areas: list[str]) -> str:
@@ -450,9 +213,9 @@ def seed_lawyers_if_empty() -> None:
                     lawyer.state,
                     _serialize_practice_areas(lawyer.practice_areas),
                     lawyer.years_called,
-                    int(lawyer.nin_verified),
-                    int(lawyer.nba_verified),
-                    int(lawyer.bvn_verified),
+                    _db_bool(lawyer.nin_verified),
+                    _db_bool(lawyer.nba_verified),
+                    _db_bool(lawyer.bvn_verified),
                     lawyer.profile_completeness,
                     lawyer.completed_matters,
                     lawyer.rating,
@@ -461,7 +224,7 @@ def seed_lawyers_if_empty() -> None:
                     lawyer.repeat_client_rate,
                     lawyer.base_consult_fee_ngn,
                     lawyer.active_complaints,
-                    int(lawyer.severe_flag),
+                    _db_bool(lawyer.severe_flag),
                     lawyer.enrollment_number,
                     lawyer.verification_document_id,
                 ),
@@ -487,7 +250,7 @@ def seed_users_if_empty() -> None:
         conn.commit()
 
 
-def row_to_lawyer(row: sqlite3.Row) -> Lawyer:
+def row_to_lawyer(row: Any) -> Lawyer:
     return Lawyer(
         id=row["id"],
         full_name=row["full_name"],
@@ -557,9 +320,9 @@ def save_lawyer(lawyer: Lawyer) -> None:
                 lawyer.state,
                 _serialize_practice_areas(lawyer.practice_areas),
                 lawyer.years_called,
-                int(lawyer.nin_verified),
-                int(lawyer.nba_verified),
-                int(lawyer.bvn_verified),
+                _db_bool(lawyer.nin_verified),
+                _db_bool(lawyer.nba_verified),
+                _db_bool(lawyer.bvn_verified),
                 lawyer.profile_completeness,
                 lawyer.completed_matters,
                 lawyer.rating,
@@ -568,7 +331,7 @@ def save_lawyer(lawyer: Lawyer) -> None:
                 lawyer.repeat_client_rate,
                 lawyer.base_consult_fee_ngn,
                 lawyer.active_complaints,
-                int(lawyer.severe_flag),
+                _db_bool(lawyer.severe_flag),
                 lawyer.enrollment_number,
                 lawyer.verification_document_id,
                 lawyer.kyc_submission_status,
@@ -663,6 +426,10 @@ def reset_db_for_tests() -> None:
         if file_path.is_file():
             file_path.unlink()
     with connect() as conn:
+        conn.execute("DELETE FROM breach_incidents")
+        conn.execute("DELETE FROM dsr_corrections")
+        conn.execute("DELETE FROM dsr_requests")
+        conn.execute("DELETE FROM consent_events")
         conn.execute("DELETE FROM notifications")
         conn.execute("DELETE FROM audit_events")
         conn.execute("DELETE FROM documents")
@@ -671,6 +438,7 @@ def reset_db_for_tests() -> None:
         conn.execute("DELETE FROM messages")
         conn.execute("DELETE FROM conversations")
         conn.execute("DELETE FROM complaints")
+        conn.execute("DELETE FROM kyc_documents")
         conn.execute("DELETE FROM sessions")
         conn.execute("DELETE FROM users")
         conn.execute("DELETE FROM kyc_events")
@@ -731,7 +499,7 @@ def create_user(
             conn.commit()
             row = conn.execute("SELECT * FROM users WHERE email = ?", (email.lower(),)).fetchone()
         return dict(row) if row else None
-    except sqlite3.IntegrityError:
+    except SQLAlchemyIntegrityError:
         return None
 
 
@@ -746,9 +514,9 @@ def _create_session(user_id: int) -> str:
             """
             INSERT INTO sessions (
                 access_token, refresh_token, user_id, created_on, access_expires_at, refresh_expires_at, revoked
-            ) VALUES (?, ?, ?, ?, ?, ?, 0)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (access_token, refresh_token, user_id, _iso(created_on), access_expires_at, refresh_expires_at),
+            (access_token, refresh_token, user_id, _iso(created_on), access_expires_at, refresh_expires_at, _db_bool(False)),
         )
         conn.commit()
     return {
@@ -792,10 +560,10 @@ def get_user_by_access_token(access_token: str) -> dict[str, Any] | None:
             FROM sessions
             JOIN users ON users.id = sessions.user_id
             WHERE sessions.access_token = ?
-              AND sessions.revoked = 0
+                            AND sessions.revoked = ?
               AND sessions.access_expires_at > ?
             """,
-            (access_token, now),
+                        (access_token, _db_bool(False), now),
         ).fetchone()
     return dict(row) if row else None
 
@@ -814,10 +582,10 @@ def refresh_session(refresh_token: str) -> dict[str, Any] | None:
         ).fetchone()
         if row is None:
             return None
-        if row["revoked"] == 1 or _parse(row["refresh_expires_at"]) <= now:
+        if bool(row["revoked"]) or _parse(row["refresh_expires_at"]) <= now:
             return None
 
-        conn.execute("UPDATE sessions SET revoked = 1 WHERE refresh_token = ?", (refresh_token,))
+        conn.execute("UPDATE sessions SET revoked = ? WHERE refresh_token = ?", (_db_bool(True), refresh_token))
         conn.commit()
 
     token_bundle = _create_session(row["user_id"])
@@ -838,15 +606,15 @@ def revoke_session(access_token: str | None = None, refresh_token: str | None = 
         if access_token and refresh_token:
             result = conn.execute(
                 """
-                UPDATE sessions SET revoked = 1
+                UPDATE sessions SET revoked = ?
                 WHERE access_token = ? OR refresh_token = ?
                 """,
-                (access_token, refresh_token),
+                (_db_bool(True), access_token, refresh_token),
             )
         elif access_token:
-            result = conn.execute("UPDATE sessions SET revoked = 1 WHERE access_token = ?", (access_token,))
+            result = conn.execute("UPDATE sessions SET revoked = ? WHERE access_token = ?", (_db_bool(True), access_token))
         else:
-            result = conn.execute("UPDATE sessions SET revoked = 1 WHERE refresh_token = ?", (refresh_token,))
+            result = conn.execute("UPDATE sessions SET revoked = ? WHERE refresh_token = ?", (_db_bool(True), refresh_token))
         conn.commit()
     return result.rowcount > 0
 
@@ -891,9 +659,9 @@ def upsert_kyc_status(
             """,
             (
                 lawyer.id,
-                int(lawyer.nin_verified),
-                int(lawyer.nba_verified),
-                int(lawyer.bvn_verified),
+                _db_bool(lawyer.nin_verified),
+                _db_bool(lawyer.nba_verified),
+                _db_bool(lawyer.bvn_verified),
                 note,
                 str(date.today()),
             ),
@@ -1395,14 +1163,701 @@ def mark_notification_read(notification_id: int, user_id: int) -> dict[str, Any]
     read_on = _iso(_now())
     with connect() as conn:
         conn.execute(
-            "UPDATE notifications SET is_read = 1, read_on = ? WHERE id = ? AND user_id = ?",
-            (read_on, notification_id, user_id),
+            "UPDATE notifications SET is_read = ?, read_on = ? WHERE id = ? AND user_id = ?",
+            (_db_bool(True), read_on, notification_id, user_id),
         )
         conn.commit()
         row = conn.execute(
             "SELECT * FROM notifications WHERE id = ? AND user_id = ?",
             (notification_id, user_id),
         ).fetchone()
+    return dict(row) if row else None
+
+
+def create_consent_event(
+    user_id: int,
+    purpose: str,
+    lawful_basis: str,
+    consented: bool,
+    policy_version: str,
+    metadata_json: str | None,
+) -> dict[str, Any]:
+    created_on = _iso(_now())
+    with connect() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO consent_events (user_id, purpose, lawful_basis, consented, policy_version, metadata_json, created_on)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (user_id, purpose, lawful_basis, _db_bool(consented), policy_version, metadata_json, created_on),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM consent_events WHERE id = ?", (cursor.lastrowid,)).fetchone()
+    return dict(row)
+
+
+def list_consent_events_for_user(user_id: int, limit: int = 100) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM consent_events WHERE user_id = ? ORDER BY id DESC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def create_dsr_request(user_id: int, request_type: str, detail: str) -> dict[str, Any]:
+    now = _iso(_now())
+    with connect() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO dsr_requests (user_id, request_type, status, detail, created_on, updated_on)
+            VALUES (?, ?, 'submitted', ?, ?, ?)
+            """,
+            (user_id, request_type, detail, now, now),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM dsr_requests WHERE id = ?", (cursor.lastrowid,)).fetchone()
+    return dict(row)
+
+
+def list_dsr_requests_for_user(user_id: int, limit: int = 100) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM dsr_requests WHERE user_id = ? ORDER BY id DESC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def list_dsr_requests(status: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
+    with connect() as conn:
+        if status:
+            rows = conn.execute(
+                "SELECT * FROM dsr_requests WHERE status = ? ORDER BY id DESC LIMIT ?",
+                (status, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM dsr_requests ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_dsr_request(dsr_request_id: int) -> dict[str, Any] | None:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM dsr_requests WHERE id = ?", (dsr_request_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def update_dsr_request_status(
+    dsr_request_id: int,
+    status: str,
+    resolution_note: str,
+    resolved_by_user_id: int,
+) -> dict[str, Any] | None:
+    now = _iso(_now())
+    resolved_on = now if status in {"completed", "rejected"} else None
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE dsr_requests
+            SET status = ?, resolution_note = ?, resolved_by_user_id = ?, resolved_on = ?, updated_on = ?
+            WHERE id = ?
+            """,
+            (status, resolution_note, resolved_by_user_id, resolved_on, now, dsr_request_id),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM dsr_requests WHERE id = ?", (dsr_request_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def run_retention_job(retention_days: int, dry_run: bool = True) -> dict[str, Any]:
+    cutoff = _iso(_now() - timedelta(days=retention_days))
+    with connect() as conn:
+        notifications = conn.execute(
+            "SELECT COUNT(*) AS total FROM notifications WHERE is_read = ? AND created_on < ?",
+            (_db_bool(True), cutoff),
+        ).fetchone()["total"]
+        audit_events = conn.execute(
+            "SELECT COUNT(*) AS total FROM audit_events WHERE created_on < ?",
+            (cutoff,),
+        ).fetchone()["total"]
+        expired_sessions = conn.execute(
+            "SELECT COUNT(*) AS total FROM sessions WHERE revoked = ? AND refresh_expires_at < ?",
+            (_db_bool(True), cutoff),
+        ).fetchone()["total"]
+
+        if not dry_run:
+            conn.execute("DELETE FROM notifications WHERE is_read = ? AND created_on < ?", (_db_bool(True), cutoff))
+            conn.execute("DELETE FROM audit_events WHERE created_on < ?", (cutoff,))
+            conn.execute("DELETE FROM sessions WHERE revoked = ? AND refresh_expires_at < ?", (_db_bool(True), cutoff))
+            conn.commit()
+
+    return {
+        "retention_days": retention_days,
+        "dry_run": dry_run,
+        "deleted_notifications": notifications,
+        "deleted_audit_events": audit_events,
+        "deleted_expired_sessions": expired_sessions,
+        "executed_on": _iso(_now()),
+    }
+
+
+def build_dsr_export_bundle(dsr_request_id: int) -> dict[str, Any] | None:
+    dsr_request = get_dsr_request(dsr_request_id)
+    if dsr_request is None:
+        return None
+
+    user = get_user_by_id(dsr_request["user_id"])
+    if user is None:
+        return None
+
+    consent_events = list_consent_events_for_user(user["id"], limit=1000)
+    dsr_history = list_dsr_requests_for_user(user["id"], limit=1000)
+
+    with connect() as conn:
+        notifications_count = conn.execute(
+            "SELECT COUNT(*) AS total FROM notifications WHERE user_id = ?",
+            (user["id"],),
+        ).fetchone()["total"]
+        sessions_count = conn.execute(
+            "SELECT COUNT(*) AS total FROM sessions WHERE user_id = ? AND revoked = ?",
+            (user["id"], _db_bool(False)),
+        ).fetchone()["total"]
+        messages_sent_count = conn.execute(
+            "SELECT COUNT(*) AS total FROM messages WHERE sender_user_id = ?",
+            (user["id"],),
+        ).fetchone()["total"]
+        notes_count = conn.execute(
+            "SELECT COUNT(*) AS total FROM consultation_notes WHERE author_user_id = ?",
+            (user["id"],),
+        ).fetchone()["total"]
+        documents_count = conn.execute(
+            "SELECT COUNT(*) AS total FROM documents WHERE uploaded_by_user_id = ?",
+            (user["id"],),
+        ).fetchone()["total"]
+        kyc_documents_count = conn.execute(
+            "SELECT COUNT(*) AS total FROM kyc_documents WHERE uploaded_by_user_id = ?",
+            (user["id"],),
+        ).fetchone()["total"]
+
+        if user["role"] == "client":
+            consultations_count = conn.execute(
+                "SELECT COUNT(*) AS total FROM consultations WHERE client_user_id = ?",
+                (user["id"],),
+            ).fetchone()["total"]
+            conversations_count = conn.execute(
+                "SELECT COUNT(*) AS total FROM conversations WHERE client_user_id = ?",
+                (user["id"],),
+            ).fetchone()["total"]
+        elif user["role"] == "lawyer":
+            consultations_count = conn.execute(
+                "SELECT COUNT(*) AS total FROM consultations WHERE lawyer_id = ?",
+                (user.get("lawyer_id"),),
+            ).fetchone()["total"]
+            conversations_count = conn.execute(
+                "SELECT COUNT(*) AS total FROM conversations WHERE lawyer_id = ?",
+                (user.get("lawyer_id"),),
+            ).fetchone()["total"]
+        else:
+            consultations_count = 0
+            conversations_count = 0
+
+    return {
+        "dsr_request": dsr_request,
+        "user_profile": {
+            "id": user["id"],
+            "email": user["email"],
+            "full_name": user["full_name"],
+            "role": user["role"],
+            "lawyer_id": user.get("lawyer_id"),
+            "created_on": user["created_on"],
+        },
+        "consent_events": consent_events,
+        "dsr_history": dsr_history,
+        "data_summary": {
+            "consultations": consultations_count,
+            "conversations": conversations_count,
+            "messages_sent": messages_sent_count,
+            "consultation_notes_authored": notes_count,
+            "documents_uploaded": documents_count,
+            "kyc_documents_uploaded": kyc_documents_count,
+            "notifications": notifications_count,
+            "active_sessions": sessions_count,
+        },
+        "generated_on": _iso(_now()),
+    }
+
+
+def execute_dsr_deletion(dsr_request_id: int, admin_user_id: int, resolution_note: str) -> dict[str, Any] | None:
+    request = get_dsr_request(dsr_request_id)
+    if request is None:
+        return None
+    if request["request_type"] != "deletion":
+        raise ValueError("DSR request type must be deletion")
+
+    user = get_user_by_id(request["user_id"])
+    if user is None:
+        raise ValueError("DSR target user not found")
+
+    anonymized_email = f"deleted+{user['id']}@redacted.local"
+    anonymized_name = f"Deleted User {user['id']}"
+    replacement_hash = _hash_password(token_hex(16))
+    now = _iso(_now())
+
+    with connect() as conn:
+        notifications_deleted = conn.execute(
+            "DELETE FROM notifications WHERE user_id = ?",
+            (user["id"],),
+        ).rowcount
+        sessions_revoked = conn.execute(
+            "DELETE FROM sessions WHERE user_id = ?",
+            (user["id"],),
+        ).rowcount
+        redacted_messages = conn.execute(
+            "UPDATE messages SET body = ? WHERE sender_user_id = ?",
+            ("[redacted by DSR deletion request]", user["id"]),
+        ).rowcount
+        redacted_notes = conn.execute(
+            "UPDATE consultation_notes SET body = ?, is_private = ? WHERE author_user_id = ?",
+            ("[redacted by DSR deletion request]", _db_bool(False), user["id"]),
+        ).rowcount
+        conn.execute(
+            """
+            UPDATE users
+            SET email = ?, full_name = ?, password_hash = ?, lawyer_id = NULL
+            WHERE id = ?
+            """,
+            (anonymized_email, anonymized_name, replacement_hash, user["id"]),
+        )
+        conn.execute(
+            """
+            UPDATE dsr_requests
+            SET status = 'completed', resolution_note = ?, resolved_by_user_id = ?, resolved_on = ?, updated_on = ?
+            WHERE id = ?
+            """,
+            (resolution_note, admin_user_id, now, now, dsr_request_id),
+        )
+        conn.commit()
+
+    return {
+        "dsr_request_id": dsr_request_id,
+        "user_id": user["id"],
+        "status": "completed",
+        "anonymized_email": anonymized_email,
+        "redacted_messages": redacted_messages,
+        "redacted_notes": redacted_notes,
+        "deleted_notifications": notifications_deleted,
+        "revoked_sessions": sessions_revoked,
+        "executed_on": now,
+    }
+
+
+def create_dsr_correction_request(
+    user_id: int,
+    field_name: str,
+    requested_value: str,
+    justification: str,
+    evidence: str | None,
+) -> dict[str, Any]:
+    user = get_user_by_id(user_id)
+    if user is None:
+        raise ValueError("User not found")
+    if field_name not in {"full_name", "email"}:
+        raise ValueError("Unsupported correction field")
+
+    current_value = user[field_name]
+    dsr_detail = f"Correction request for field '{field_name}'"
+    now = _iso(_now())
+
+    with connect() as conn:
+        dsr_cursor = conn.execute(
+            """
+            INSERT INTO dsr_requests (user_id, request_type, status, detail, created_on, updated_on)
+            VALUES (?, 'correction', 'submitted', ?, ?, ?)
+            """,
+            (user_id, dsr_detail, now, now),
+        )
+        dsr_request_id = dsr_cursor.lastrowid
+        correction_cursor = conn.execute(
+            """
+            INSERT INTO dsr_corrections (
+                dsr_request_id, user_id, field_name, current_value, requested_value,
+                justification, evidence, status, created_on, updated_on
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'submitted', ?, ?)
+            """,
+            (
+                dsr_request_id,
+                user_id,
+                field_name,
+                current_value,
+                requested_value,
+                justification,
+                evidence,
+                now,
+                now,
+            ),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM dsr_corrections WHERE id = ?", (correction_cursor.lastrowid,)).fetchone()
+    return dict(row)
+
+
+def list_dsr_corrections_for_user(user_id: int, limit: int = 100) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM dsr_corrections WHERE user_id = ? ORDER BY id DESC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def list_dsr_corrections(status: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
+    with connect() as conn:
+        if status:
+            rows = conn.execute(
+                "SELECT * FROM dsr_corrections WHERE status = ? ORDER BY id DESC LIMIT ?",
+                (status, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM dsr_corrections ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_dsr_correction(correction_id: int) -> dict[str, Any] | None:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM dsr_corrections WHERE id = ?", (correction_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def review_dsr_correction(
+    correction_id: int,
+    status: str,
+    review_note: str,
+    reviewed_by_user_id: int,
+) -> dict[str, Any] | None:
+    if status not in {"approved", "rejected"}:
+        raise ValueError("Invalid review status")
+
+    correction = get_dsr_correction(correction_id)
+    if correction is None:
+        return None
+    if correction["status"] != "submitted":
+        raise ValueError("Correction request has already been reviewed")
+
+    now = _iso(_now())
+    with connect() as conn:
+        if status == "approved":
+            if correction["field_name"] == "email":
+                existing = conn.execute(
+                    "SELECT id FROM users WHERE email = ? AND id != ?",
+                    (correction["requested_value"].lower(), correction["user_id"]),
+                ).fetchone()
+                if existing is not None:
+                    raise ValueError("Requested email is already in use")
+                conn.execute(
+                    "UPDATE users SET email = ? WHERE id = ?",
+                    (correction["requested_value"].lower(), correction["user_id"]),
+                )
+            else:
+                conn.execute(
+                    "UPDATE users SET full_name = ? WHERE id = ?",
+                    (correction["requested_value"], correction["user_id"]),
+                )
+
+        conn.execute(
+            """
+            UPDATE dsr_corrections
+            SET status = ?, review_note = ?, reviewed_by_user_id = ?, reviewed_on = ?, updated_on = ?
+            WHERE id = ?
+            """,
+            (status, review_note, reviewed_by_user_id, now, now, correction_id),
+        )
+        dsr_status = "completed" if status == "approved" else "rejected"
+        conn.execute(
+            """
+            UPDATE dsr_requests
+            SET status = ?, resolution_note = ?, resolved_by_user_id = ?, resolved_on = ?, updated_on = ?
+            WHERE id = ?
+            """,
+            (dsr_status, review_note, reviewed_by_user_id, now, now, correction["dsr_request_id"]),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM dsr_corrections WHERE id = ?", (correction_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def create_breach_incident(
+    title: str,
+    severity: str,
+    description: str,
+    impact_summary: str | None,
+    affected_data_types: str | None,
+    affected_records: int | None,
+    occurred_on: str | None,
+    detected_on: str,
+    actor_user_id: int,
+) -> dict[str, Any]:
+    now = _iso(_now())
+    with connect() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO breach_incidents (
+                title, severity, status, description, impact_summary, affected_data_types,
+                affected_records, occurred_on, detected_on, escalation_triggered,
+                created_by_user_id, updated_by_user_id, created_on, updated_on
+            )
+            VALUES (?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                title,
+                severity,
+                description,
+                impact_summary,
+                affected_data_types,
+                affected_records,
+                occurred_on,
+                detected_on,
+                False,
+                actor_user_id,
+                actor_user_id,
+                now,
+                now,
+            ),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM breach_incidents WHERE id = ?", (cursor.lastrowid,)).fetchone()
+    return dict(row)
+
+
+def list_breach_incidents(status: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
+    with connect() as conn:
+        if status:
+            rows = conn.execute(
+                "SELECT * FROM breach_incidents WHERE status = ? ORDER BY id DESC LIMIT ?",
+                (status, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM breach_incidents ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_breach_incident(breach_incident_id: int) -> dict[str, Any] | None:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM breach_incidents WHERE id = ?", (breach_incident_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def update_breach_incident(
+    breach_incident_id: int,
+    actor_user_id: int,
+    status: str,
+    impact_summary: str | None,
+    affected_records: int | None,
+    reported_to_ndpc: bool | None,
+    ndpc_reported_on: str | None,
+    contained_on: str | None,
+    resolved_on: str | None,
+    resolution_note: str | None,
+) -> dict[str, Any] | None:
+    now = _iso(_now())
+    with connect() as conn:
+        existing = conn.execute("SELECT * FROM breach_incidents WHERE id = ?", (breach_incident_id,)).fetchone()
+        if existing is None:
+            return None
+        incident = dict(existing)
+
+        next_impact_summary = impact_summary if impact_summary is not None else incident.get("impact_summary")
+        next_affected_records = affected_records if affected_records is not None else incident.get("affected_records")
+        next_reported_to_ndpc = _db_bool(reported_to_ndpc) if reported_to_ndpc is not None else incident.get("reported_to_ndpc")
+        next_ndpc_reported_on = ndpc_reported_on if ndpc_reported_on is not None else incident.get("ndpc_reported_on")
+        next_contained_on = contained_on if contained_on is not None else incident.get("contained_on")
+        next_resolved_on = resolved_on if resolved_on is not None else incident.get("resolved_on")
+        next_resolution_note = resolution_note if resolution_note is not None else incident.get("resolution_note")
+
+        conn.execute(
+            """
+            UPDATE breach_incidents
+            SET status = ?, impact_summary = ?, affected_records = ?, reported_to_ndpc = ?,
+                ndpc_reported_on = ?, contained_on = ?, resolved_on = ?, resolution_note = ?,
+                updated_by_user_id = ?, updated_on = ?
+            WHERE id = ?
+            """,
+            (
+                status,
+                next_impact_summary,
+                next_affected_records,
+                next_reported_to_ndpc,
+                next_ndpc_reported_on,
+                next_contained_on,
+                next_resolved_on,
+                next_resolution_note,
+                actor_user_id,
+                now,
+                breach_incident_id,
+            ),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM breach_incidents WHERE id = ?", (breach_incident_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def check_breach_sla_status(breach_incident_id: int) -> dict[str, Any] | None:
+    """Check SLA status for a breach incident (NDPA 72-hour notification deadline).
+    
+    Returns SLA status info including days until deadline and escalation state.
+    """
+    from datetime import datetime, timedelta
+    
+    with connect() as conn:
+        breach = conn.execute(
+            "SELECT * FROM breach_incidents WHERE id = ?",
+            (breach_incident_id,)
+        ).fetchone()
+    
+    if not breach:
+        return None
+    
+    breach_dict = dict(breach)
+    now = datetime.utcnow()
+    
+    # Calculate notification deadline if not already set (72 hours from detection)
+    if breach_dict["notification_deadline"] is None:
+        detected_on = datetime.fromisoformat(breach_dict["detected_on"])
+        deadline = detected_on + timedelta(hours=72)
+        breach_dict["notification_deadline"] = deadline.isoformat()
+        with connect() as conn:
+            conn.execute(
+                "UPDATE breach_incidents SET notification_deadline = ? WHERE id = ?",
+                (deadline.isoformat(), breach_incident_id)
+            )
+            conn.commit()
+    else:
+        deadline = datetime.fromisoformat(breach_dict["notification_deadline"])
+    
+    # Calculate days remaining
+    time_remaining = deadline - now
+    days_remaining = int(time_remaining.total_seconds() / 86400)
+    breach_dict["days_until_deadline"] = days_remaining
+    
+    # Determine SLA status
+    if breach_dict["reported_to_ndpc"]:
+        sla_status = "notified"
+    elif days_remaining < 0:
+        sla_status = "overdue"
+    elif days_remaining <= 1:
+        sla_status = "at-risk"
+    else:
+        sla_status = "on-track"
+    
+    breach_dict["sla_status"] = sla_status
+    
+    return breach_dict
+
+
+def list_breach_incidents_by_sla_status(sla_status: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
+    """List breach incidents filtered by SLA status (on-track, at-risk, overdue, notified).
+    
+    Orders by notification deadline ascending (soonest first).
+    """
+    from datetime import datetime, timedelta
+    
+    with connect() as conn:
+        rows = conn.execute(
+            """SELECT * FROM breach_incidents 
+               WHERE status NOT IN ('resolved')
+               ORDER BY detected_on DESC
+               LIMIT ?""",
+            (limit,)
+        ).fetchall()
+    
+    breaches = [dict(row) for row in rows]
+    now = datetime.utcnow()
+    
+    # Enrich with SLA status and filter if requested
+    enriched = []
+    for breach in breaches:
+        # Calculate deadline if not already set
+        if not breach.get("notification_deadline"):
+            detected_on = datetime.fromisoformat(breach["detected_on"])
+            deadline = detected_on + timedelta(hours=72)
+            breach["notification_deadline"] = deadline.isoformat()
+            with connect() as conn:
+                conn.execute(
+                    "UPDATE breach_incidents SET notification_deadline = ? WHERE id = ?",
+                    (deadline.isoformat(), breach["id"])
+                )
+                conn.commit()
+        else:
+            # Handle both string and datetime object from DB
+            deadline_val = breach["notification_deadline"]
+            if isinstance(deadline_val, str):
+                deadline = datetime.fromisoformat(deadline_val)
+            else:
+                deadline = deadline_val
+        
+        # Calculate days remaining
+        time_remaining = deadline - now
+        days_remaining = int(time_remaining.total_seconds() / 86400)
+        breach["days_until_deadline"] = days_remaining
+        
+        # Determine SLA status
+        if breach["reported_to_ndpc"]:
+            breach["sla_status"] = "notified"
+        elif days_remaining < 0:
+            breach["sla_status"] = "overdue"
+        elif days_remaining <= 1:
+            breach["sla_status"] = "at-risk"
+        else:
+            breach["sla_status"] = "on-track"
+        
+        if sla_status is None or breach.get("sla_status") == sla_status:
+            enriched.append(breach)
+    
+    # Sort by deadline ascending (soonest first)
+    enriched.sort(key=lambda b: b.get("notification_deadline", ""), reverse=False)
+    
+    return enriched
+
+
+def trigger_breach_escalation(breach_incident_id: int, actor_user_id: int) -> dict[str, Any] | None:
+    """Trigger escalation alert for a breach incident.
+    
+    Sets escalation_triggered flag and logs timestamp. Called when SLA deadline
+    is imminent or overdue.
+    """
+    from datetime import datetime
+    
+    now = datetime.utcnow().isoformat()
+    
+    with connect() as conn:
+        conn.execute(
+            """UPDATE breach_incidents 
+               SET escalation_triggered = true, escalation_triggered_at = ?, updated_by_user_id = ?, updated_on = ?
+               WHERE id = ? AND escalation_triggered = false""",
+            (now, actor_user_id, now, breach_incident_id)
+        )
+        conn.commit()
+        
+        # Log as audit event
+        create_audit_event(
+            actor_user_id=actor_user_id,
+            action="breach_escalation_triggered",
+            resource_type="breach_incident",
+            resource_id=str(breach_incident_id),
+            detail=f"Breach SLA escalation triggered at {now}",
+        )
+        
+        row = conn.execute("SELECT * FROM breach_incidents WHERE id = ?", (breach_incident_id,)).fetchone()
+    
     return dict(row) if row else None
 
 
@@ -1470,7 +1925,7 @@ def create_consultation_note(consultation_id: int, author_user_id: int, body: st
         now = datetime.now(UTC).isoformat()
         cursor = conn.execute(
             "INSERT INTO consultation_notes (consultation_id, author_user_id, body, is_private, created_on) VALUES (?, ?, ?, ?, ?)",
-            (consultation_id, author_user_id, body, 1 if is_private else 0, now),
+            (consultation_id, author_user_id, body, _db_bool(is_private), now),
         )
         nid = cursor.lastrowid
         return {
@@ -1493,7 +1948,7 @@ def list_consultation_notes(consultation_id: int, user_id: int | None = None, la
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT * FROM consultation_notes WHERE consultation_id = ? AND (is_private = 0 OR author_user_id = ?) ORDER BY created_on DESC",
-                (consultation_id, user_id),
+                "SELECT * FROM consultation_notes WHERE consultation_id = ? AND (is_private = ? OR author_user_id = ?) ORDER BY created_on DESC",
+                (consultation_id, _db_bool(False), user_id),
             ).fetchall()
         return [dict(row) for row in rows]
