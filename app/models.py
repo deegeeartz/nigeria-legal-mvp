@@ -274,10 +274,6 @@ class PaymentCreateRequest(BaseModel):
     provider: str = Field(default="paystack", min_length=3, max_length=30)
 
 
-class PaymentActionRequest(BaseModel):
-    action: str = Field(pattern="^(complete|fail|release)$")
-
-
 class PaymentResponse(BaseModel):
     payment_id: int
     consultation_id: int
@@ -291,10 +287,6 @@ class PaymentResponse(BaseModel):
     gateway_status: str | None = None
     paid_on: str | None = None
     released_on: str | None = None
-
-
-class PaystackVerifyRequest(BaseModel):
-    outcome: str = Field(pattern="^(success|failed)$")
 
 
 class AuditEventResponse(BaseModel):
@@ -354,4 +346,3 @@ class ConsultationNoteResponse(BaseModel):
     body: str
     is_private: bool
     created_on: str
-

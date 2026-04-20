@@ -1176,7 +1176,16 @@ def update_consultation_status(consultation_id: int, new_status: str) -> dict[st
     return get_consultation(consultation_id)
 
 
-def create_payment(consultation_id: int, provider: str = "simulation") -> dict[str, Any] | None:
+def create_payment(
+    consultation_id: int,
+    provider: str = "simulation",
+    *,
+    reference: str | None = None,
+    access_code: str | None = None,
+    authorization_url: str | None = None,
+    gateway_status: str = "initialized",
+    amount_ngn: int | None = None,
+) -> dict[str, Any] | None:
     consultation = get_consultation(consultation_id)
     if consultation is None:
         return None
@@ -1185,9 +1194,10 @@ def create_payment(consultation_id: int, provider: str = "simulation") -> dict[s
         return None
     created_on = str(date.today())
     normalized_provider = "paystack" if provider in {"simulation", "paystack", "paystack_simulation"} else provider
-    reference = f"PSTKSIM-{token_hex(6).upper()}"
-    access_code = f"acs_{token_hex(8)}"
-    authorization_url = f"https://paystack.mock/checkout/{reference}"
+    payment_reference = reference or f"PSTKSIM-{token_hex(6).upper()}"
+    payment_access_code = access_code or f"acs_{token_hex(8)}"
+    payment_authorization_url = authorization_url or f"https://paystack.mock/checkout/{payment_reference}"
+    payment_amount_ngn = amount_ngn if amount_ngn is not None else lawyer.base_consult_fee_ngn
     with connect() as conn:
         cursor = conn.execute(
             """
@@ -1195,16 +1205,17 @@ def create_payment(consultation_id: int, provider: str = "simulation") -> dict[s
                 consultation_id, reference, provider, amount_ngn, status, created_on,
                 access_code, authorization_url, gateway_status
             )
-            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, 'initialized')
+            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?)
             """,
             (
                 consultation_id,
-                reference,
+                payment_reference,
                 normalized_provider,
-                lawyer.base_consult_fee_ngn,
+                payment_amount_ngn,
                 created_on,
-                access_code,
-                authorization_url,
+                payment_access_code,
+                payment_authorization_url,
+                gateway_status,
             ),
         )
         conn.commit()
@@ -1254,12 +1265,21 @@ def update_payment_status(payment_id: int, action: str) -> dict[str, Any] | None
     return dict(row) if row else None
 
 
-def verify_paystack_payment(reference: str, outcome: str) -> dict[str, Any] | None:
+def verify_paystack_payment(reference: str, gateway_status: str) -> dict[str, Any] | None:
     payment = get_payment_by_reference(reference)
     if payment is None:
         return None
-    action = "complete" if outcome == "success" else "fail"
-    return update_payment_status(payment["id"], action)
+    normalized_gateway_status = gateway_status.lower()
+    next_status = "paid" if normalized_gateway_status == "success" else "failed"
+    paid_on = str(date.today()) if next_status == "paid" else None
+    with connect() as conn:
+        conn.execute(
+            "UPDATE payments SET status = ?, gateway_status = ?, paid_on = ? WHERE id = ?",
+            (next_status, normalized_gateway_status, paid_on, payment["id"]),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM payments WHERE id = ?", (payment["id"],)).fetchone()
+    return dict(row) if row else None
 
 
 def create_document(

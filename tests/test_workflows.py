@@ -8,10 +8,21 @@ from app.main import app
 client = TestClient(app)
 
 
+class _MockPaystackResponse:
+    def __init__(self, status_code: int, payload: dict) -> None:
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self) -> dict:
+        return self._payload
+
+
 @pytest.fixture(autouse=True)
-def reset_db() -> None:
+def reset_db(monkeypatch: pytest.MonkeyPatch) -> None:
     reset_db_for_tests()
     create_user("lawyer.user@example.com", "SecurePass123!", "Sadiq Bello", "lawyer", "lw_004")
+    monkeypatch.setenv("PAYSTACK_SECRET_KEY", "sk_test_local")
+    monkeypatch.delenv("PAYSTACK_BASE_URL", raising=False)
 
 
 def _signup_client() -> dict:
@@ -64,9 +75,33 @@ def test_conversation_and_message_flow() -> None:
     assert len(messages.json()) == 2
 
 
-def test_consultation_booking_and_payment_simulation() -> None:
+def test_consultation_booking_and_paystack_verification(monkeypatch: pytest.MonkeyPatch) -> None:
     client_auth = _signup_client()
-    lawyer_auth = _login_lawyer()
+    call_state = {"initialize_called": False, "verify_called": False}
+
+    def _mock_paystack_request(method: str, url: str, **kwargs) -> _MockPaystackResponse:
+        if method == "POST" and url.endswith("/transaction/initialize"):
+            call_state["initialize_called"] = True
+            payload = kwargs["json"]
+            assert payload["email"] == "client.workflow@example.com"
+            assert payload["amount"] > 0
+            return _MockPaystackResponse(
+                200,
+                {
+                    "status": True,
+                    "data": {
+                        "reference": "PSK_REF_WORKFLOW_1",
+                        "access_code": "acs_workflow_1",
+                        "authorization_url": "https://checkout.paystack.com/workflow",
+                    },
+                },
+            )
+        if method == "GET" and url.endswith("/transaction/verify/PSK_REF_WORKFLOW_1"):
+            call_state["verify_called"] = True
+            return _MockPaystackResponse(200, {"status": True, "data": {"status": "success"}})
+        raise AssertionError(f"Unexpected Paystack request: {method} {url}")
+
+    monkeypatch.setattr("app.routers.payments.httpx.request", _mock_paystack_request)
 
     consultation = client.post(
         "/api/consultations",
@@ -81,29 +116,27 @@ def test_consultation_booking_and_payment_simulation() -> None:
     consultation_id = consultation.json()["consultation_id"]
 
     payment = client.post(
-        "/api/payments/simulate",
+        "/api/payments/paystack/initialize",
         headers={"X-Auth-Token": client_auth["access_token"]},
-        json={"consultation_id": consultation_id, "provider": "simulation"},
+        json={"consultation_id": consultation_id, "provider": "paystack"},
     )
     assert payment.status_code == 200
     payment_id = payment.json()["payment_id"]
+    assert payment.json()["reference"] == "PSK_REF_WORKFLOW_1"
+    assert payment.json()["access_code"] == "acs_workflow_1"
+    assert payment.json()["authorization_url"] == "https://checkout.paystack.com/workflow"
     assert payment.json()["status"] == "pending"
+    assert call_state["initialize_called"] is True
 
-    complete = client.post(
-        f"/api/payments/{payment_id}/simulate",
+    verify = client.post(
+        "/api/payments/paystack/PSK_REF_WORKFLOW_1/verify",
         headers={"X-Auth-Token": client_auth["access_token"]},
-        json={"action": "complete"},
     )
-    assert complete.status_code == 200
-    assert complete.json()["status"] == "paid"
-
-    release = client.post(
-        f"/api/payments/{payment_id}/simulate",
-        headers={"X-Auth-Token": lawyer_auth["access_token"]},
-        json={"action": "release"},
-    )
-    assert release.status_code == 200
-    assert release.json()["status"] == "released"
+    assert verify.status_code == 200
+    assert verify.json()["payment_id"] == payment_id
+    assert verify.json()["status"] == "paid"
+    assert verify.json()["gateway_status"] == "success"
+    assert call_state["verify_called"] is True
 
 
 def test_lawyer_cannot_access_other_client_consultation() -> None:

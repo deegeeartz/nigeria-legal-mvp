@@ -173,7 +173,7 @@ class UatRunner:
 
         verified = self._post_json(
             f"/api/payments/paystack/{payment_ref}/verify",
-            {"outcome": "success"},
+            {},
             token=self.client_token,
         )
         self._assert_status(verified, 200, "verify payment")
