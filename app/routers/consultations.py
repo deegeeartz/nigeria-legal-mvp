@@ -20,13 +20,22 @@ from app.db import (
     user_can_access_document,
     list_documents_for_consultation,
     get_document_file_path,
+    create_milestone,
+    list_milestones,
+    create_consultation_note,
+    list_consultation_notes,
 )
 from app.models import (
     ConsultationCreateRequest,
     ConsultationStatusUpdateRequest,
     ConsultationResponse,
     DocumentResponse,
+    MilestoneCreateRequest,
+    MilestoneResponse,
+    ConsultationNoteCreateRequest,
+    ConsultationNoteResponse,
 )
+
 
 MAX_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024
 
@@ -247,3 +256,84 @@ def download_document(
         media_type=document["content_type"],
         filename=document["original_filename"],
     )
+
+
+@router.post("/api/consultations/{consultation_id}/milestones", response_model=MilestoneResponse)
+def add_milestone(
+    consultation_id: int,
+    payload: MilestoneCreateRequest,
+    x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
+) -> MilestoneResponse:
+    user = require_user(x_auth_token)
+    if user["role"] not in ["lawyer", "admin"]:
+        raise HTTPException(status_code=403, detail="Only lawyers and admins can add milestones")
+    if not user_can_access_consultation(user, consultation_id):
+        raise HTTPException(status_code=403, detail="Consultation access denied")
+    
+    milestone = create_milestone(consultation_id, payload.event_name, payload.status_label, payload.description)
+    log_event(user["id"], "consultation.milestone_added", "consultation", str(consultation_id), f"Added milestone: {payload.event_name}")
+    notify_users(
+        list_consultation_participant_user_ids(consultation_id),
+        kind="consultation_booked",
+        title="New Case Milestone",
+        body=f"Milestone added: {payload.event_name}",
+        resource_type="consultation",
+        resource_id=str(consultation_id),
+        exclude_user_id=user["id"],
+    )
+    return MilestoneResponse(**milestone)
+
+
+@router.get("/api/consultations/{consultation_id}/milestones", response_model=list[MilestoneResponse])
+def get_milestones_endpoint(
+    consultation_id: int,
+    x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
+) -> list[MilestoneResponse]:
+    user = require_user(x_auth_token)
+    if not user_can_access_consultation(user, consultation_id):
+        raise HTTPException(status_code=403, detail="Consultation access denied")
+    return [MilestoneResponse(**m) for m in list_milestones(consultation_id)]
+
+
+@router.post("/api/consultations/{consultation_id}/notes", response_model=ConsultationNoteResponse)
+def add_note(
+    consultation_id: int,
+    payload: ConsultationNoteCreateRequest,
+    x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
+) -> ConsultationNoteResponse:
+    user = require_user(x_auth_token)
+    if not user_can_access_consultation(user, consultation_id):
+        raise HTTPException(status_code=403, detail="Consultation access denied")
+    
+    if payload.is_private and user["role"] != "lawyer" and user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only lawyers and admins can create private notes")
+
+    note = create_consultation_note(consultation_id, user["id"], payload.body, payload.is_private)
+    log_event(user["id"], "consultation.note_added", "consultation", str(consultation_id), "Added a progress note")
+    
+    if not payload.is_private:
+         notify_users(
+            list_consultation_participant_user_ids(consultation_id),
+            kind="consultation_booked",
+            title="New Case Update",
+            body="A new progress note has been added to your case.",
+            resource_type="consultation",
+            resource_id=str(consultation_id),
+            exclude_user_id=user["id"],
+        )
+    return ConsultationNoteResponse(**note)
+
+
+@router.get("/api/consultations/{consultation_id}/notes", response_model=list[ConsultationNoteResponse])
+def get_notes_endpoint(
+    consultation_id: int,
+    x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
+) -> list[ConsultationNoteResponse]:
+    user = require_user(x_auth_token)
+    if not user_can_access_consultation(user, consultation_id):
+        raise HTTPException(status_code=403, detail="Consultation access denied")
+    
+    lawyer_id = user["lawyer_id"] if user["role"] == "lawyer" else None
+    notes = list_consultation_notes(consultation_id, user_id=user["id"], lawyer_id=lawyer_id)
+    return [ConsultationNoteResponse(**n) for n in notes]
+

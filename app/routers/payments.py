@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
 from typing import Optional
+from datetime import datetime, UTC
 
 from app.dependencies import (
     log_event,
     notify_users,
     require_user,
 )
+from app.routers.messaging import manager
 from app.db import (
     create_payment,
     user_can_access_consultation,
@@ -121,4 +123,50 @@ def simulate_payment_action(
         resource_id=str(payment_id),
     )
     return to_payment_response(updated)
+
+
+@router.post("/api/payments/webhook")
+async def paystack_webhook(request: Request):
+    # In production, verify X-Paystack-Signature here
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    event = payload.get("event")
+    data = payload.get("data", {})
+    reference = data.get("reference")
+
+    if event == "charge.success" and reference:
+        payment = get_payment_by_reference(reference)
+        if payment:
+            updated = verify_paystack_payment(reference, "success")
+            
+            # Broadcast update via WebSocket
+            ws_payload = {
+                "event": "payment_verified",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "data": {
+                    "payment_id": payment["id"],
+                    "reference": reference,
+                    "status": "verified",
+                    "consultation_id": payment["consultation_id"]
+                }
+            }
+            # Notify both client and lawyer
+            participants = list_consultation_participant_user_ids(payment["consultation_id"])
+            await manager.broadcast_to_users(ws_payload, participants)
+            
+            log_event(None, "payment.webhook_verified", "payment", str(payment["id"]), f"Webhook received for {reference}")
+            notify_users(
+                participants,
+                kind="payment_updated",
+                title="Payment Verified",
+                body=f"Your payment for consultation {payment['consultation_id']} has been verified.",
+                resource_type="payment",
+                resource_id=str(payment["id"]),
+            )
+
+    return {"status": "accepted"}
+
 

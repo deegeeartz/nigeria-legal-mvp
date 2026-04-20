@@ -329,3 +329,29 @@ class DocumentResponse(BaseModel):
     content_type: str
     size_bytes: int
     created_on: str
+
+class MilestoneCreateRequest(BaseModel):
+    event_name: str = Field(min_length=2, max_length=100)
+    status_label: str | None = Field(default=None, max_length=50)
+    description: str | None = Field(default=None, max_length=500)
+
+class MilestoneResponse(BaseModel):
+    id: int
+    consultation_id: int
+    event_name: str
+    status_label: str | None = None
+    description: str | None = None
+    created_on: str
+
+class ConsultationNoteCreateRequest(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+    is_private: bool = False
+
+class ConsultationNoteResponse(BaseModel):
+    id: int
+    consultation_id: int
+    author_user_id: int
+    body: str
+    is_private: bool
+    created_on: str
+

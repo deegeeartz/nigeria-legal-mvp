@@ -190,6 +190,33 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS consultation_milestones (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                consultation_id INTEGER NOT NULL,
+                event_name TEXT NOT NULL,
+                status_label TEXT,
+                description TEXT,
+                created_on TEXT NOT NULL,
+                FOREIGN KEY(consultation_id) REFERENCES consultations(id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS consultation_notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                consultation_id INTEGER NOT NULL,
+                author_user_id INTEGER NOT NULL,
+                body TEXT NOT NULL,
+                is_private INTEGER NOT NULL DEFAULT 0,
+                created_on TEXT NOT NULL,
+                FOREIGN KEY(consultation_id) REFERENCES consultations(id),
+                FOREIGN KEY(author_user_id) REFERENCES users(id)
+            )
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS audit_events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 actor_user_id INTEGER,
@@ -1411,3 +1438,62 @@ def list_conversation_participant_user_ids(conversation_id: int) -> list[int]:
         return []
     participant_ids = [conversation["client_user_id"], *get_lawyer_user_ids(conversation["lawyer_id"])]
     return list(dict.fromkeys(participant_ids))
+def create_milestone(consultation_id: int, event_name: str, status_label: str | None = None, description: str | None = None) -> dict:
+    with connect() as conn:
+        now = datetime.now(UTC).isoformat()
+        cursor = conn.execute(
+            "INSERT INTO consultation_milestones (consultation_id, event_name, status_label, description, created_on) VALUES (?, ?, ?, ?, ?)",
+            (consultation_id, event_name, status_label, description, now),
+        )
+        mid = cursor.lastrowid
+        return {
+            "id": mid,
+            "consultation_id": consultation_id,
+            "event_name": event_name,
+            "status_label": status_label,
+            "description": description,
+            "created_on": now,
+        }
+
+
+def list_milestones(consultation_id: int) -> list[dict]:
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM consultation_milestones WHERE consultation_id = ? ORDER BY created_on ASC",
+            (consultation_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+
+def create_consultation_note(consultation_id: int, author_user_id: int, body: str, is_private: bool = False) -> dict:
+    with connect() as conn:
+        now = datetime.now(UTC).isoformat()
+        cursor = conn.execute(
+            "INSERT INTO consultation_notes (consultation_id, author_user_id, body, is_private, created_on) VALUES (?, ?, ?, ?, ?)",
+            (consultation_id, author_user_id, body, 1 if is_private else 0, now),
+        )
+        nid = cursor.lastrowid
+        return {
+            "id": nid,
+            "consultation_id": consultation_id,
+            "author_user_id": author_user_id,
+            "body": body,
+            "is_private": is_private,
+            "created_on": now,
+        }
+
+
+def list_consultation_notes(consultation_id: int, user_id: int | None = None, lawyer_id: str | None = None) -> list[dict]:
+    # If lawyer_id is provided, they see everything. If not, only non-private ones or those they authored.
+    with connect() as conn:
+        if lawyer_id:
+            rows = conn.execute(
+                "SELECT * FROM consultation_notes WHERE consultation_id = ? ORDER BY created_on DESC",
+                (consultation_id,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM consultation_notes WHERE consultation_id = ? AND (is_private = 0 OR author_user_id = ?) ORDER BY created_on DESC",
+                (consultation_id, user_id),
+            ).fetchall()
+        return [dict(row) for row in rows]

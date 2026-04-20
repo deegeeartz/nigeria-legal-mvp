@@ -3,7 +3,8 @@
 import { useAuth } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle, Download, FileText, Loader2, Upload, XCircle } from "lucide-react";
+import { CheckCircle, Download, FileText, Loader2, Upload, XCircle, Plus, Lock, Unlock, MessageSquareText, History } from "lucide-react";
+
 
 const STATUS_COLORS = {
   pending: "bg-amber-100 text-amber-700",
@@ -19,16 +20,31 @@ export default function ConsultationsPage() {
   const [consultations, setConsultations] = useState([]);
   const [selectedConsultationId, setSelectedConsultationId] = useState("");
   const [documents, setDocuments] = useState([]);
+  const [milestones, setMilestones] = useState([]);
+  const [notes, setNotes] = useState([]);
 
   const [fetchingConsultations, setFetchingConsultations] = useState(true);
   const [fetchingDocuments, setFetchingDocuments] = useState(false);
+  const [fetchingMilestones, setFetchingMilestones] = useState(false);
+  const [fetchingNotes, setFetchingNotes] = useState(false);
+
   const [uploading, setUploading] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [addingMilestone, setAddingMilestone] = useState(false);
+  const [addingNote, setAddingNote] = useState(false);
 
   const [documentLabel, setDocumentLabel] = useState("supporting_document");
   const [file, setFile] = useState(null);
+
+  const [milestoneEvent, setMilestoneEvent] = useState("");
+  const [milestoneDesc, setMilestoneDesc] = useState("");
+  
+  const [noteBody, setNoteBody] = useState("");
+  const [noteIsPrivate, setNoteIsPrivate] = useState(false);
+
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
 
   useEffect(() => {
     if (!loading && !user) {
@@ -91,6 +107,85 @@ export default function ConsultationsPage() {
 
     void loadDocuments();
   }, [authFetch, selectedConsultationId]);
+
+  useEffect(() => {
+    const loadMilestonesAndNotes = async () => {
+      if (!selectedConsultationId) {
+        setMilestones([]);
+        setNotes([]);
+        return;
+      }
+
+      setFetchingMilestones(true);
+      setFetchingNotes(true);
+      try {
+        const [milestonesRes, notesRes] = await Promise.all([
+          authFetch(`/api/consultations/${selectedConsultationId}/milestones`),
+          authFetch(`/api/consultations/${selectedConsultationId}/notes`),
+        ]);
+        if (milestonesRes.ok) setMilestones(await milestonesRes.json());
+        if (notesRes.ok) setNotes(await notesRes.json());
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setFetchingMilestones(false);
+        setFetchingNotes(false);
+      }
+    };
+    void loadMilestonesAndNotes();
+  }, [authFetch, selectedConsultationId]);
+
+  const handleAddMilestone = async (e) => {
+    e.preventDefault();
+    setAddingMilestone(true);
+    try {
+      const response = await authFetch(`/api/consultations/${selectedConsultationId}/milestones`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event_name: milestoneEvent,
+          description: milestoneDesc,
+        }),
+      });
+      if (response.ok) {
+        const created = await response.json();
+        setMilestones(prev => [...prev, created]);
+        setMilestoneEvent("");
+        setMilestoneDesc("");
+        setSuccessMessage("Milestone added to case history.");
+      }
+    } catch (err) {
+      setErrorMessage("Failed to add milestone.");
+    } finally {
+      setAddingMilestone(false);
+    }
+  };
+
+  const handleAddNote = async (e) => {
+    e.preventDefault();
+    setAddingNote(true);
+    try {
+      const response = await authFetch(`/api/consultations/${selectedConsultationId}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          body: noteBody,
+          is_private: noteIsPrivate,
+        }),
+      });
+      if (response.ok) {
+        const created = await response.json();
+        setNotes(prev => [created, ...prev]);
+        setNoteBody("");
+        setSuccessMessage(noteIsPrivate ? "Private note saved." : "Update shared with client.");
+      }
+    } catch (err) {
+      setErrorMessage("Failed to save note.");
+    } finally {
+      setAddingNote(false);
+    }
+  };
+
 
   const selectedConsultation = useMemo(
     () => consultations.find((item) => String(item.consultation_id) === selectedConsultationId),
@@ -309,7 +404,7 @@ export default function ConsultationsPage() {
               ) : documents.length === 0 ? (
                 <p className="text-sm text-slate-500">No documents uploaded for this consultation yet.</p>
               ) : (
-                <ul className="space-y-3">
+                <ul className="space-y-3 mb-8">
                   {documents.map((item) => (
                     <li key={item.document_id} className="border border-slate-100 rounded-xl p-4 flex items-center justify-between gap-4">
                       <div>
@@ -327,6 +422,114 @@ export default function ConsultationsPage() {
                   ))}
                 </ul>
               )}
+
+              {/* Case Tracking Timeline */}
+              <div className="mt-12 border-t border-slate-100 pt-8">
+                <div className="flex items-center gap-2 mb-6">
+                  <History className="text-emerald-600 w-5 h-5" />
+                  <h3 className="text-lg font-bold text-slate-800">Matter Timeline</h3>
+                </div>
+                
+                <div className="relative pl-6 border-l-2 border-slate-100 space-y-8 mb-8">
+                  {milestones.length === 0 ? (
+                    <p className="text-sm text-slate-400 italic">No milestones logged yet.</p>
+                  ) : milestones.map((m) => (
+                    <div key={m.id} className="relative">
+                      <div className="absolute -left-[33px] mt-1.5 w-4 h-4 rounded-full bg-emerald-500 border-4 border-white"></div>
+                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                        <div className="flex justify-between items-start mb-1">
+                          <h4 className="font-bold text-slate-800 text-sm">{m.event_name}</h4>
+                          <span className="text-[10px] text-slate-400">{new Date(m.created_on).toLocaleDateString()}</span>
+                        </div>
+                        {m.description && <p className="text-xs text-slate-600 leading-relaxed">{m.description}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {(user.role === 'lawyer' || user.role === 'admin') && (
+                  <form onSubmit={handleAddMilestone} className="bg-slate-50 rounded-2xl p-4 border border-emerald-100">
+                    <p className="text-xs font-bold text-emerald-700 uppercase mb-3">Add Case Milestone</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                      <input 
+                        value={milestoneEvent} 
+                        onChange={e => setMilestoneEvent(e.target.value)} 
+                        placeholder="Milestone (e.g. Case Filed)"
+                        className="px-3 py-2 text-sm rounded-lg border border-slate-200"
+                        required
+                      />
+                      <input 
+                        value={milestoneDesc} 
+                        onChange={e => setMilestoneDesc(e.target.value)} 
+                        placeholder="Brief details (Optional)"
+                        className="px-3 py-2 text-sm rounded-lg border border-slate-200"
+                      />
+                    </div>
+                    <button 
+                      type="submit" 
+                      disabled={addingMilestone || !milestoneEvent}
+                      className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" /> Log Milestone
+                    </button>
+                  </form>
+                )}
+              </div>
+
+              {/* Progress Notes */}
+              <div className="mt-12 border-t border-slate-100 pt-8">
+                <div className="flex items-center gap-2 mb-6">
+                  <MessageSquareText className="text-emerald-600 w-5 h-5" />
+                  <h3 className="text-lg font-bold text-slate-800">Progress Notes</h3>
+                </div>
+
+                <form onSubmit={handleAddNote} className="mb-8">
+                  <textarea 
+                    value={noteBody}
+                    onChange={e => setNoteBody(e.target.value)}
+                    placeholder="Add a case update..."
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 text-sm h-24 mb-3 focus:ring-2 focus:ring-emerald-500 outline-none"
+                    required
+                  />
+                  <div className="flex items-center justify-between">
+                    {(user.role === 'lawyer' || user.role === 'admin') ? (
+                      <button 
+                        type="button" 
+                        onClick={() => setNoteIsPrivate(!noteIsPrivate)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${noteIsPrivate ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}
+                      >
+                        {noteIsPrivate ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                        {noteIsPrivate ? 'Private Note' : 'Share with Client'}
+                      </button>
+                    ) : <div></div>}
+                    <button 
+                      type="submit"
+                      disabled={addingNote || !noteBody}
+                      className="px-6 py-2 bg-slate-900 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold transition-all"
+                    >
+                      {addingNote ? 'Saving...' : 'Add Note'}
+                    </button>
+                  </div>
+                </form>
+
+                <div className="space-y-4">
+                  {notes.length === 0 ? (
+                    <p className="text-sm text-slate-400 italic">No notes available.</p>
+                  ) : notes.map((n) => (
+                    <div key={n.id} className={`p-4 rounded-2xl border ${n.is_private ? 'bg-amber-50 border-amber-100' : 'bg-white border-slate-100 shadow-sm'}`}>
+                      <div className="flex justify-between items-center mb-2">
+                        <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
+                          <span>User #{n.author_user_id}</span>
+                          {n.is_private && <span className="flex items-center gap-1 text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded uppercase"><Lock className="w-3 h-3" /> Lawyer Only</span>}
+                        </div>
+                        <span className="text-[10px] text-slate-400">{new Date(n.created_on).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
+                      </div>
+                      <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{n.body}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
             </div>
           </div>
         )}

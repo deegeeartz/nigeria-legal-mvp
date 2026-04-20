@@ -30,6 +30,7 @@ export const viewport = {
 };
 
 import { AuthProvider } from "@/lib/auth";
+import { RealTimeProvider } from "@/lib/realtime";
 import { Navigation } from "@/components/Navigation";
 
 export default function RootLayout({ children }) {
@@ -40,12 +41,15 @@ export default function RootLayout({ children }) {
     >
       <body className="min-h-full flex flex-col bg-slate-50 text-slate-900 pb-20 md:pb-0">
         <AuthProvider>
-          <Navigation />
-          <main className="flex-1 flex flex-col">
-            {children}
-          </main>
+          <RealTimeProvider>
+            <Navigation />
+            <main className="flex-1 flex flex-col">
+              {children}
+            </main>
+          </RealTimeProvider>
         </AuthProvider>
       </body>
     </html>
   );
 }
+

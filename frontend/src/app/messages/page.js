@@ -1,17 +1,42 @@
 "use client";
 
 import { useAuth } from "@/lib/auth";
+import { useRealTime } from "@/lib/realtime";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Send } from "lucide-react";
+import { Loader2, Send, Clock } from "lucide-react";
+
 
 export default function MessagesPage() {
   const { user, loading, authFetch } = useAuth();
+  const { lastEvent } = useRealTime();
   const router = useRouter();
 
   const [conversations, setConversations] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [messages, setMessages] = useState([]);
+
+  // Live WebSocket listener
+  useEffect(() => {
+    if (lastEvent?.event === "new_message") {
+      const { data } = lastEvent;
+      if (data.conversation_id === selectedId) {
+        setMessages((prev) => {
+            // Avoid duplicates
+            if (prev.some(m => m.message_id === data.message_id)) return prev;
+            return [...prev, {
+                id: data.message_id,
+                message_id: data.message_id,
+                conversation_id: data.conversation_id,
+                sender_user_id: data.sender_user_id,
+                body: data.body,
+                created_on: data.created_on
+            }];
+        });
+      }
+    }
+  }, [lastEvent, selectedId]);
+
 
   const [lawyerId, setLawyerId] = useState("");
   const [initialMessage, setInitialMessage] = useState("");
@@ -236,11 +261,20 @@ export default function MessagesPage() {
                     messages.map((message) => (
                       <div
                         key={message.message_id}
-                        className={`rounded-xl px-3 py-2 text-sm border ${message.sender_user_id === user.user_id ? "bg-emerald-50 border-emerald-200" : "bg-slate-50 border-slate-200"}`}
+                        className={`rounded-xl px-3 py-2 text-sm border ${message.sender_user_id === user.user_id ? "bg-emerald-50 border-emerald-200" : "bg-white border-slate-200"}`}
                       >
-                        <p className="font-medium text-slate-800">User #{message.sender_user_id}</p>
-                        <p className="text-slate-700 mt-1">{message.body}</p>
+                        <div className="flex justify-between items-center mb-1">
+                            <p className="font-semibold text-slate-800">
+                                {message.sender_user_id === user.user_id ? "You" : `User #${message.sender_user_id}`}
+                            </p>
+                            <p className="text-[10px] text-slate-400 flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {new Date(message.created_on).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                        </div>
+                        <p className="text-slate-700">{message.body}</p>
                       </div>
+
                     ))
                   )}
                 </div>
