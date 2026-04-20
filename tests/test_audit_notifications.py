@@ -27,7 +27,7 @@ class _MockPaystackResponse:
 def reset_db(monkeypatch: pytest.MonkeyPatch) -> None:
     reset_db_for_tests()
     create_user("lawyer.user@example.com", "SecurePass123!", "Sadiq Bello", "lawyer", "lw_004")
-    monkeypatch.setenv("PAYSTACK_SECRET_KEY", "sk_test_local")
+    monkeypatch.setenv("PAYSTACK_SECRET_KEY", "sk_test_1234567890abcdef")
     monkeypatch.delenv("PAYSTACK_BASE_URL", raising=False)
 
 
@@ -226,7 +226,7 @@ def test_paystack_webhook_accepts_valid_signature_and_broadcasts(monkeypatch: py
 
     payload = {"event": "charge.success", "data": {"reference": "PSK_REF_WEBHOOK_1"}}
     raw_payload = json.dumps(payload).encode("utf-8")
-    signature = hmac.new(b"sk_test_local", raw_payload, hashlib.sha512).hexdigest()
+    signature = hmac.new(b"sk_test_1234567890abcdef", raw_payload, hashlib.sha512).hexdigest()
     response = client.post(
         "/api/payments/webhook",
         data=raw_payload,

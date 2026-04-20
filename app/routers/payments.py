@@ -109,6 +109,7 @@ def initialize_paystack_payment(
         "transaction/initialize",
         {
             "email": client_user["email"],
+            # Paystack expects amount in kobo (NGN * 100).
             "amount": consult_fee_ngn * 100,
             "metadata": {"consultation_id": payload.consultation_id},
         },

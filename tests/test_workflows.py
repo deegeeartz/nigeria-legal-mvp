@@ -21,7 +21,7 @@ class _MockPaystackResponse:
 def reset_db(monkeypatch: pytest.MonkeyPatch) -> None:
     reset_db_for_tests()
     create_user("lawyer.user@example.com", "SecurePass123!", "Sadiq Bello", "lawyer", "lw_004")
-    monkeypatch.setenv("PAYSTACK_SECRET_KEY", "sk_test_local")
+    monkeypatch.setenv("PAYSTACK_SECRET_KEY", "sk_test_1234567890abcdef")
     monkeypatch.delenv("PAYSTACK_BASE_URL", raising=False)
 
 
