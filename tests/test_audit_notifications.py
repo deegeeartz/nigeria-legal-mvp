@@ -239,3 +239,21 @@ def test_paystack_webhook_accepts_valid_signature_and_broadcasts(monkeypatch: py
     assert payment is not None
     assert payment["status"] == "paid"
     assert payment["gateway_status"] == "success"
+
+
+def test_paystack_webhook_ignores_non_charge_events(monkeypatch: pytest.MonkeyPatch) -> None:
+    mock_broadcast = AsyncMock()
+    monkeypatch.setattr(manager, "broadcast_to_users", mock_broadcast)
+
+    payload = {"event": "transfer.success", "data": {"reference": "unused"}}
+    raw_payload = json.dumps(payload).encode("utf-8")
+    signature = hmac.new(b"sk_test_1234567890abcdef", raw_payload, hashlib.sha512).hexdigest()
+
+    response = client.post(
+        "/api/payments/webhook",
+        data=raw_payload,
+        headers={"x-paystack-signature": signature, "content-type": "application/json"},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "accepted"
+    mock_broadcast.assert_not_called()
