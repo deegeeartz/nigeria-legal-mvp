@@ -1197,7 +1197,8 @@ def create_payment(
     payment_reference = reference or f"PSTKSIM-{token_hex(6).upper()}"
     payment_access_code = access_code or f"acs_{token_hex(8)}"
     payment_authorization_url = authorization_url or f"https://paystack.mock/checkout/{payment_reference}"
-    payment_amount_ngn = amount_ngn if amount_ngn is not None else lawyer.base_consult_fee_ngn
+    consult_fee_ngn = lawyer.base_consult_fee_ngn
+    payment_amount_ngn = amount_ngn if amount_ngn is not None else consult_fee_ngn
     with connect() as conn:
         cursor = conn.execute(
             """

@@ -102,13 +102,14 @@ def initialize_paystack_payment(
     client_user = get_user_by_id(consultation["client_user_id"])
     if client_user is None:
         raise HTTPException(status_code=404, detail="Client user not found")
+    consult_fee_ngn = lawyer.base_consult_fee_ngn
 
     paystack_data = _paystack_request(
         "POST",
         "transaction/initialize",
         {
             "email": client_user["email"],
-            "amount": lawyer.base_consult_fee_ngn * 100,
+            "amount": consult_fee_ngn * 100,
             "metadata": {"consultation_id": payload.consultation_id},
         },
     )
@@ -121,7 +122,7 @@ def initialize_paystack_payment(
         access_code=paystack_data.get("access_code"),
         authorization_url=paystack_data.get("authorization_url"),
         gateway_status="initialized",
-        amount_ngn=lawyer.base_consult_fee_ngn,
+        amount_ngn=consult_fee_ngn,
     )
     if payment is None:
         raise HTTPException(status_code=500, detail="Unable to create payment record")
