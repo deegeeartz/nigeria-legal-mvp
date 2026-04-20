@@ -74,13 +74,11 @@ A FastAPI MVP implementing the agreed Nigeria-first legal matching strategy:
 - `GET /api/documents/{document_id}/download`:
   - Downloads a stored document for an authorized consultation participant
 - `POST /api/payments/paystack/initialize`:
-  - Initializes a Paystack-style simulated payment (reference, access code, checkout URL)
+  - Initializes a real Paystack payment (test mode supported) and returns `reference`, `access_code`, `authorization_url`
 - `POST /api/payments/paystack/{reference}/verify`:
-  - Simulates Paystack verification result (`success|failed`) for a payment reference
-- `POST /api/payments/simulate`:
-  - Backward-compatible alias to initialize Paystack-style simulation
-- `POST /api/payments/{payment_id}/simulate`:
-  - Simulates internal transitions (`complete|fail|release`) for workflow testing
+  - Verifies payment by calling Paystack `transaction/verify/{reference}` server-to-server
+- `POST /api/payments/webhook`:
+  - Receives Paystack webhooks and verifies `x-paystack-signature` before processing events
 - `GET /health`
 
 ## Project structure
@@ -95,8 +93,8 @@ A FastAPI MVP implementing the agreed Nigeria-first legal matching strategy:
 - `tests/test_ranking.py` - ranking and policy tests
 - `tests/test_complaints.py` - complaint trigger and DB tests
 - `tests/test_auth_kyc_tracker.py` - auth, role guards, KYC, tracker API tests
-- `tests/test_workflows.py` - chat, consultation, payment simulation, and document access tests
-- `tests/test_audit_notifications.py` - audit feed, notification flow, and Paystack simulation tests
+- `tests/test_workflows.py` - chat, consultation, Paystack verification, and document access tests
+- `tests/test_audit_notifications.py` - audit feed, notification flow, and Paystack webhook/security tests
 - `storage/uploads` - local document storage used by the MVP
 - `run.py` - local dev runner
 
@@ -126,6 +124,14 @@ Key variables:
 - `LOG_LEVEL`
 - `SLOW_REQUEST_MS`
 - `ENABLE_REQUEST_LOGGING`
+- `PAYSTACK_SECRET_KEY` (required for payment initialize/verify/webhook)
+- `PAYSTACK_BASE_URL` (optional, defaults to `https://api.paystack.co`)
+
+Paystack setup (test mode):
+
+1. Set `PAYSTACK_SECRET_KEY` to your Paystack test secret key (`sk_test_...`).
+2. Keep `PAYSTACK_BASE_URL=https://api.paystack.co` unless using a custom gateway URL.
+3. Configure your Paystack webhook URL to `POST /api/payments/webhook`.
 
 ## Run
 
@@ -280,7 +286,7 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/auth/logout -Heade
 - Consultation documents are stored in `storage/uploads` and are limited to 10MB per file.
 - Consultation document access is restricted to the owning client, assigned lawyer, or admin.
 - Sensitive actions are captured in audit events and accessible through `GET /api/audit-events` (admin-only).
-- Payment flow now uses a Paystack-style simulation contract (`initialize` + `verify`) while keeping simulation safety for MVP.
+- Payment flow now uses Paystack server-to-server integration (`initialize` + `verify`) with webhook signature verification.
 
 ## Pilot DB Mode (SQLite)
 
