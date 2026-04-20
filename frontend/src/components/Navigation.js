@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
-import { Home, Search, Bell, BriefcaseBusiness, MessageSquare, User, ShieldAlert } from "lucide-react";
+import { Home, Search, Bell, BriefcaseBusiness, MessageSquare, User, ShieldAlert, Stamp } from "lucide-react";
 
 export function Navigation() {
   const pathname = usePathname();
@@ -15,6 +15,7 @@ export function Navigation() {
     ...(user ? [{ href: "/messages", label: "Messages", icon: MessageSquare }] : []),
     ...(user ? [{ href: "/consultations", label: "Consultations", icon: BriefcaseBusiness }] : []),
     ...(user?.role === "lawyer" ? [{ href: "/kyc", label: "KYC", icon: User }] : []),
+    ...(user?.role === "lawyer" ? [{ href: "/lawyer/seal", label: "Seal", icon: Stamp }] : []),
     ...(user ? [{ href: "/notifications", label: "Notifications", icon: Bell }] : []),
     ...(user ? [{ href: "/dashboard", label: "Dashboard", icon: User }] : []),
     ...(user?.role === "admin" ? [{ href: "/admin/audit", label: "Audit Log", icon: ShieldAlert }] : []),

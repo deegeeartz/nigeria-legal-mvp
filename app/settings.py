@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import os
 from pathlib import Path
 from urllib.parse import urlparse
@@ -40,6 +42,11 @@ STRICT_SECURITY_MODE = _env_bool("STRICT_SECURITY_MODE", ENVIRONMENT in {"stagin
 
 PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY", "dev_paystack_secret")
 PAYSTACK_WEBHOOK_ENFORCE_SIGNATURE = _env_bool("PAYSTACK_WEBHOOK_ENFORCE_SIGNATURE", True)
+
+SEAL_ENCRYPTION_KEY = os.getenv("SEAL_ENCRYPTION_KEY", "").strip()
+if not SEAL_ENCRYPTION_KEY:
+    derived_key_bytes = hashlib.sha256(PAYSTACK_SECRET_KEY.encode("utf-8")).digest()
+    SEAL_ENCRYPTION_KEY = base64.urlsafe_b64encode(derived_key_bytes).decode("utf-8")
 
 AUTH_RATE_LIMIT_WINDOW_SECONDS = _env_int("AUTH_RATE_LIMIT_WINDOW_SECONDS", 60)
 LOGIN_FAILURE_LIMIT = _env_int("LOGIN_FAILURE_LIMIT", 5)

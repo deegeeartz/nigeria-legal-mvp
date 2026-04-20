@@ -3,12 +3,15 @@ from __future__ import annotations
 import socket
 import struct
 
+from cryptography.fernet import Fernet, InvalidToken
+
 from app.settings import (
     CLAMAV_HOST,
     CLAMAV_PORT,
     CLAMAV_TIMEOUT_SECONDS,
     MALWARE_SCAN_FAIL_CLOSED,
     MALWARE_SCAN_MODE,
+    SEAL_ENCRYPTION_KEY,
 )
 
 
@@ -17,6 +20,10 @@ class MalwareScanError(RuntimeError):
 
 
 class MalwareDetectedError(MalwareScanError):
+    pass
+
+
+class SealEncryptionError(RuntimeError):
     pass
 
 
@@ -66,3 +73,21 @@ def scan_upload_for_malware(file_bytes: bytes) -> None:
         except MalwareScanError:
             if MALWARE_SCAN_FAIL_CLOSED:
                 raise
+
+
+def _seal_cipher() -> Fernet:
+    try:
+        return Fernet(SEAL_ENCRYPTION_KEY.encode("utf-8"))
+    except Exception as exc:
+        raise SealEncryptionError("Invalid seal encryption key configuration") from exc
+
+
+def encrypt_seal_bytes(file_bytes: bytes) -> bytes:
+    return _seal_cipher().encrypt(file_bytes)
+
+
+def decrypt_seal_bytes(encrypted_bytes: bytes) -> bytes:
+    try:
+        return _seal_cipher().decrypt(encrypted_bytes)
+    except InvalidToken as exc:
+        raise SealEncryptionError("Seal decryption failed: invalid ciphertext or key") from exc

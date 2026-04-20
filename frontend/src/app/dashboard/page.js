@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { Bell, BriefcaseBusiness, Loader2, MessageSquare, ShieldAlert } from "lucide-react";
+import { Bell, BriefcaseBusiness, Loader2, MessageSquare, ShieldAlert, Stamp } from "lucide-react";
 
 export default function DashboardPage() {
   const { user, loading, authFetch } = useAuth();
@@ -119,6 +119,16 @@ export default function DashboardPage() {
             </div>
             <p className="text-slate-600 text-sm">Track message, payment, and workflow updates in real time.</p>
           </Link>
+
+          {user.role === "lawyer" && (
+            <Link href="/lawyer/seal" className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:border-emerald-200 transition-colors md:col-span-2">
+              <div className="flex items-center gap-3 mb-2">
+                <Stamp className="text-emerald-600" />
+                <h3 className="text-lg font-bold text-slate-800">Annual Stamp &amp; Seal</h3>
+              </div>
+              <p className="text-slate-600 text-sm">Upload your current year NBA stamp/seal with BPF and CPD details. The file stays private and encrypted; clients only see your trust icon.</p>
+            </Link>
+          )}
         </div>
 
         <div className="mt-8 bg-white p-6 rounded-3xl shadow-sm border border-slate-100">

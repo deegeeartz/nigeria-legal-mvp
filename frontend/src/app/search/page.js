@@ -130,7 +130,10 @@ export default function SearchPage() {
                      <div>
                        <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                          {lw.full_name}
-                         {lw.badges?.includes("NBA Verified") && <ShieldCheck className="text-emerald-500 w-5 h-5" />}
+                         {lw.badges?.includes("NBA Verified") && <ShieldCheck className="text-emerald-500 w-5 h-5" title="NBA Verified" />}
+                         {lw.badges?.some((b) => b.includes("Seal & Stamp")) && (
+                           <span className="text-lg" title={lw.badges.find((b) => b.includes("Seal & Stamp"))}>📜</span>
+                         )}
                        </h3>
                        <p className="text-sm font-medium text-slate-500">{lw.tier?.replaceAll("_", " ")} • Score {lw.score}</p>
                      </div>
@@ -147,7 +150,6 @@ export default function SearchPage() {
                        </span>
                      ))}
                    </div>
-                   
                    <div className="flex items-center justify-between text-sm font-medium border-t border-slate-100 pt-4 text-slate-500">
                      <div className="flex items-center gap-4">
                        <span className="flex items-center gap-1"><MapPin size={16} /> {lw.state}</span>

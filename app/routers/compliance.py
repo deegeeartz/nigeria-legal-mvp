@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query, UploadFile, File
+from fastapi.responses import Response
 
 from app.dependencies import log_event, require_admin, require_user
 from app.db import (
@@ -28,6 +29,13 @@ from app.db import (
     run_retention_job,
     update_breach_incident,
     update_dsr_request_status,
+    get_lawyer,
+    upsert_practice_seal,
+    get_practice_seal,
+    get_latest_practice_seal,
+    list_compliant_lawyers,
+    list_seal_events,
+    UPLOADS_DIR,
 )
 from app.models import (
     BreachIncidentCreateRequest,
@@ -47,6 +55,9 @@ from app.models import (
     DsrRequestStatusUpdateRequest,
     RetentionRunRequest,
     RetentionRunResponse,
+    PracticeSealUploadRequest,
+    PracticeSealResponse,
+    PracticeSealCheckResponse,
 )
 
 router = APIRouter(prefix="/api/compliance", tags=["compliance"])
@@ -435,4 +446,360 @@ def escalate_breach_incident_sla(
         "escalation_triggered_at": escalated.get("escalation_triggered_at"),
         "message": "Escalation alert triggered for compliance team",
     }
+
+
+# ===== PRACTICE SEAL & APL/CPD COMPLIANCE =====
+
+@router.post("/practice-seal/upload", response_model=PracticeSealResponse)
+def upload_practice_seal(
+    lawyer_id: str = Query(..., min_length=3, max_length=40),
+    practice_year: int = Query(..., ge=2025, le=2030),
+    bpf_paid: bool = Query(True),
+    cpd_points: int = Query(0, ge=0, le=100),
+    seal_document: Optional[UploadFile] = File(None),
+    x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
+) -> dict:
+    """
+    Upload lawyer's annual practice seal (digital stamp & seal document).
+    
+    This endpoint records NBA-mandated practice compliance for given year:
+    - BPF (annual practising list) payment status
+    - CPD (continuing professional development) points accumulation
+    - Digital seal document (encrypted, not visible to public)
+    
+    Seal becomes visible on lawyer's public profile once CPD-compliant (bpf_paid AND cpd_points >= 5).
+    """
+    from app.security import scan_upload_for_malware, encrypt_seal_bytes
+    from secrets import token_hex
+    
+    # Require user (lawyer can upload own seal, admin can upload for any lawyer)
+    user = require_user(x_auth_token)
+    
+    # Verify lawyer exists
+    lawyer = get_lawyer(lawyer_id)
+    if lawyer is None:
+        raise HTTPException(status_code=404, detail="Lawyer not found")
+    
+    # Check authorization: lawyer uploading own seal, admin can upload for any lawyer, clients blocked
+    if user["role"] == "lawyer" and user.get("lawyer_id") != lawyer_id:
+        raise HTTPException(status_code=403, detail="Cannot upload seal for another lawyer")
+    if user["role"] == "client":
+        raise HTTPException(status_code=403, detail="Only administrators or the lawyer can upload seals")
+    
+    # Process seal document if provided
+    seal_file_key = None
+    seal_mime_type = None
+    
+    if seal_document:
+        from app.db import UPLOADS_DIR
+        
+        # Read and scan document
+        file_bytes = seal_document.file.read()
+        
+        try:
+            scan_upload_for_malware(file_bytes)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Malware scan failed or file rejected: {str(e)}")
+        
+        # Validate MIME type
+        allowed_mimes = {"application/pdf", "image/png", "image/jpeg"}
+        seal_mime_type = seal_document.content_type or "application/octet-stream"
+        if seal_mime_type not in allowed_mimes:
+            raise HTTPException(status_code=400, detail=f"Seal document must be PDF, PNG, or JPEG. Got: {seal_mime_type}")
+        
+        # Validate size (10MB max)
+        if len(file_bytes) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Seal document must be under 10MB")
+        
+        # Encrypt and store file with random key
+        encrypted_file_bytes = encrypt_seal_bytes(file_bytes)
+        seal_file_key = f"seal_{lawyer_id}_{practice_year}_{token_hex(16)}"
+        file_path = UPLOADS_DIR / seal_file_key
+        file_path.write_bytes(encrypted_file_bytes)
+    
+    # Upsert seal record
+    seal_record = upsert_practice_seal(
+        lawyer_id=lawyer_id,
+        practice_year=practice_year,
+        bpf_paid=bpf_paid,
+        cpd_points=cpd_points,
+        seal_file_key=seal_file_key,
+        seal_mime_type=seal_mime_type,
+        source="manual",
+        verified_by_user_id=user["id"] if user["role"] == "admin" else None,
+    )
+    
+    # Log event
+    log_event(
+        user["id"],
+        "compliance.seal_uploaded",
+        "lawyer_practice_seal",
+        lawyer_id,
+        f"Seal uploaded for {practice_year}: BPF={bpf_paid}, CPD points={cpd_points}",
+    )
+    
+    # Convert datetime to ISO string if needed
+    def _iso_str(val):
+        return val.isoformat() if hasattr(val, 'isoformat') else val
+    
+    return PracticeSealResponse(
+        lawyer_id=seal_record["lawyer_id"],
+        practice_year=seal_record["practice_year"],
+        bpf_paid=seal_record["bpf_paid"],
+        cpd_points=seal_record["cpd_points"],
+        cpd_compliant=seal_record["cpd_compliant"],
+        aplineligible=seal_record["aplineligible"],
+        seal_uploaded_at=_iso_str(seal_record.get("seal_uploaded_at")),
+        seal_expires_at=_iso_str(seal_record.get("seal_expires_at")),
+        verified_on=_iso_str(seal_record.get("verified_on")) if seal_record.get("verified_on") else None,
+        verified_by_user_id=seal_record.get("verified_by_user_id"),
+        source=seal_record["source"],
+        created_on=_iso_str(seal_record["created_on"]),
+        updated_on=_iso_str(seal_record["updated_on"]),
+    )
+
+
+@router.get("/practice-seal/check", response_model=PracticeSealCheckResponse)
+def check_practice_seal(
+    lawyer_id: str = Query(..., min_length=3, max_length=40),
+    x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
+) -> dict:
+    """Check current seal compliance status for lawyer.
+    
+    Returns whether lawyer has valid seal (not expired) and is CPD-compliant.
+    Accessible to public (no auth required) - seal is intended as public trust signal.
+    """
+    from datetime import datetime, UTC
+    
+    lawyer = get_lawyer(lawyer_id)
+    if lawyer is None:
+        raise HTTPException(status_code=404, detail="Lawyer not found")
+    
+    seal = get_latest_practice_seal(lawyer_id)
+    
+    now = datetime.now(UTC).date().isoformat()
+    has_valid_seal = False
+    seal_year = None
+    cpd_compliant = False
+    apl_eligible = False
+    
+    if seal:
+        seal_year = seal.get("practice_year")
+        cpd_compliant = seal.get("cpd_compliant", False)
+        apl_eligible = seal.get("aplineligible", False)
+        
+        # Check if seal hasn't expired (expires 31 Dec of practice year)
+        expires_at = seal.get("seal_expires_at")
+        # Convert expires_at to ISO string for comparison
+        if expires_at:
+            expires_str = expires_at.isoformat() if hasattr(expires_at, 'isoformat') else str(expires_at)
+            has_valid_seal = expires_str >= now and cpd_compliant
+        else:
+            has_valid_seal = False
+    
+    return PracticeSealCheckResponse(
+        lawyer_id=lawyer_id,
+        has_valid_seal=has_valid_seal,
+        seal_year=seal_year,
+        cpd_compliant=cpd_compliant,
+        apl_eligible=apl_eligible,
+        seal_badge_visible=bool(lawyer.latest_seal_year) if lawyer else False,
+    )
+
+
+@router.get("/practice-seal/{lawyer_id}", response_model=PracticeSealResponse | None)
+def get_lawyer_practice_seal(
+    lawyer_id: str,
+    practice_year: int = Query(..., ge=2025, le=2030),
+    x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
+) -> dict | None:
+    """Retrieve practice seal record for lawyer in specific year.
+    
+    Public endpoint (no auth required) - seal compliance info is public trust signal.
+    Does NOT return encrypted seal document (file_key is not included).
+    """
+    seal = get_practice_seal(lawyer_id, practice_year)
+    if seal is None:
+        return None
+    
+    # Convert datetime to ISO string if needed
+    def _iso_str(val):
+        return val.isoformat() if hasattr(val, 'isoformat') else val
+    
+    return PracticeSealResponse(
+        lawyer_id=seal["lawyer_id"],
+        practice_year=seal["practice_year"],
+        bpf_paid=seal["bpf_paid"],
+        cpd_points=seal["cpd_points"],
+        cpd_compliant=seal["cpd_compliant"],
+        aplineligible=seal["aplineligible"],
+        seal_uploaded_at=_iso_str(seal.get("seal_uploaded_at")),
+        seal_expires_at=_iso_str(seal.get("seal_expires_at")),
+        verified_on=_iso_str(seal.get("verified_on")) if seal.get("verified_on") else None,
+        verified_by_user_id=seal.get("verified_by_user_id"),
+        source=seal["source"],
+        created_on=_iso_str(seal["created_on"]),
+        updated_on=_iso_str(seal["updated_on"]),
+    )
+
+
+@router.get("/practising-list", response_model=list[dict])
+def list_apl_compliant_lawyers(
+    practice_year: int = Query(2026),
+    limit: int = Query(500, ge=10, le=5000),
+    x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
+) -> list[dict]:
+    """
+    Get list of CPD-compliant lawyers (Annual Practising List equivalent).
+    
+    Returns lawyers with valid seals for given year:
+    - BPF paid (annual practising list eligible)
+    - CPD points >= 5 (compliant)
+    - Seal not expired
+    
+    Public endpoint - APL compliance is public record in Nigeria.
+    """
+    compliant_lawyers = list_compliant_lawyers(practice_year, limit)
+    
+    return [
+        {
+            "lawyer_id": row["lawyer_id"],
+            "full_name": row["full_name"],
+            "state": row["state"],
+            "rating": row["rating"],
+            "cpd_points": row["cpd_points"],
+            "seal_expires_at": row["seal_expires_at"],
+        }
+        for row in compliant_lawyers
+    ]
+
+
+@router.post("/practice-seal/{lawyer_id}/verify", response_model=dict)
+def admin_verify_practice_seal(
+    lawyer_id: str,
+    practice_year: int = Query(..., ge=2025, le=2030),
+    bpf_paid: bool = Query(...),
+    cpd_points: int = Query(..., ge=0, le=100),
+    verification_notes: str = Query("", max_length=500),
+    x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
+) -> dict:
+    """
+    Admin endpoint: Verify and approve lawyer's practice seal compliance.
+    
+    Admin-only operation. Used to confirm BPF payment and CPD points from
+    external NBA sources or manual audit. Sets verified_on and verified_by_user_id.
+    """
+    admin_user = require_admin(x_auth_token)
+    
+    lawyer = get_lawyer(lawyer_id)
+    if lawyer is None:
+        raise HTTPException(status_code=404, detail="Lawyer not found")
+    
+    # Upsert seal with admin verification
+    seal_record = upsert_practice_seal(
+        lawyer_id=lawyer_id,
+        practice_year=practice_year,
+        bpf_paid=bpf_paid,
+        cpd_points=cpd_points,
+        source="admin_override",
+        verified_by_user_id=admin_user["id"],
+        verification_notes=verification_notes,
+    )
+    
+    log_event(
+        admin_user["id"],
+        "compliance.seal_verified",
+        "lawyer_practice_seal",
+        lawyer_id,
+        f"Admin verified seal for {practice_year}: BPF={bpf_paid}, CPD={cpd_points}",
+    )
+    
+    return {
+        "lawyer_id": seal_record["lawyer_id"],
+        "practice_year": seal_record["practice_year"],
+        "cpd_compliant": seal_record["cpd_compliant"],
+        "verified_on": seal_record.get("verified_on"),
+        "verified_by_user_id": seal_record.get("verified_by_user_id"),
+        "message": f"Seal verified for {lawyer.full_name}. Compliance status: {'COMPLIANT' if seal_record['cpd_compliant'] else 'NOT COMPLIANT'}",
+    }
+
+
+@router.get("/practice-seal/{lawyer_id}/audit-trail", response_model=list[dict])
+def get_seal_audit_trail(
+    lawyer_id: str,
+    practice_year: int = Query(None),
+    limit: int = Query(100, ge=10, le=1000),
+    x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
+) -> list[dict]:
+    """Get audit trail of seal operations (uploads, verifications, updates).
+    
+    Admin-only endpoint for compliance auditing. Shows all actions taken on
+    lawyer's seals with timestamps and actor information.
+    """
+    admin_user = require_admin(x_auth_token)
+    
+    seal_events = list_seal_events(lawyer_id, practice_year, limit)
+    
+    return [
+        {
+            "action": event["action"],
+            "actor_user_id": event["actor_user_id"],
+            "detail": event["detail"],
+            "created_on": event["created_on"],
+        }
+        for event in seal_events
+    ]
+
+
+@router.get("/practice-seal/{lawyer_id}/document/download")
+def admin_download_seal_document(
+    lawyer_id: str,
+    practice_year: int = Query(..., ge=2025, le=2030),
+    x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
+) -> Response:
+    """Admin-only endpoint to download and decrypt stored stamp/seal document."""
+    from app.security import decrypt_seal_bytes, SealEncryptionError
+
+    admin_user = require_admin(x_auth_token)
+
+    seal = get_practice_seal(lawyer_id, practice_year)
+    if seal is None:
+        raise HTTPException(status_code=404, detail="Seal record not found")
+
+    storage_key = seal.get("seal_file_key")
+    if not storage_key:
+        raise HTTPException(status_code=404, detail="Seal document file not found")
+
+    encrypted_path = UPLOADS_DIR / storage_key
+    if not encrypted_path.exists():
+        raise HTTPException(status_code=404, detail="Stored seal document not found")
+
+    encrypted_bytes = encrypted_path.read_bytes()
+    try:
+        decrypted_bytes = decrypt_seal_bytes(encrypted_bytes)
+    except SealEncryptionError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    content_type = seal.get("seal_mime_type") or "application/octet-stream"
+    extension = "pdf"
+    if content_type == "image/png":
+        extension = "png"
+    elif content_type == "image/jpeg":
+        extension = "jpg"
+
+    download_filename = f"stamp_seal_{lawyer_id}_{practice_year}.{extension}"
+
+    log_event(
+        admin_user["id"],
+        "compliance.seal_document_downloaded",
+        "lawyer_practice_seal",
+        f"{lawyer_id}:{practice_year}",
+        f"Admin downloaded decrypted seal document for {lawyer_id} ({practice_year})",
+    )
+
+    return Response(
+        content=decrypted_bytes,
+        media_type=content_type,
+        headers={"Content-Disposition": f'attachment; filename="{download_filename}"'},
+    )
 

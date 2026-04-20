@@ -1861,6 +1861,168 @@ def trigger_breach_escalation(breach_incident_id: int, actor_user_id: int) -> di
     return dict(row) if row else None
 
 
+# ===== PRACTICE SEAL & APL/CPD MANAGEMENT =====
+
+def upsert_practice_seal(
+    lawyer_id: str,
+    practice_year: int,
+    bpf_paid: bool = False,
+    bpf_paid_date: str | None = None,
+    cpd_points: int = 0,
+    seal_file_key: str | None = None,
+    seal_mime_type: str | None = None,
+    source: str = "manual",
+    source_ref: str | None = None,
+    verified_by_user_id: int | None = None,
+    verification_notes: str | None = None,
+) -> dict[str, Any]:
+    """
+    Upsert lawyer's annual practice seal record (APL/CPD compliance tracking).
+    
+    Creates or updates seal for given year. Automatically computes:
+    - cpd_compliant = bpf_paid AND cpd_points >= 5
+    - aplineligible = bpf_paid (Annual Practising List)
+    - seal_expires_at = 12/31 of practice_year (31 Dec)
+    
+    Logs seal_events audit record for verification trail.
+    """
+    now = datetime.now(UTC).isoformat()
+    verified_on = datetime.now(UTC).date().isoformat() if verified_by_user_id else None
+    
+    # Compute derived fields
+    cpd_threshold = 5
+    cpd_compliant = bpf_paid and cpd_points >= cpd_threshold
+    aplineligible = bpf_paid
+    
+    # Seal expires 31 Dec of practice year
+    seal_expires_at = f"{practice_year}-12-31"
+    
+    with connect() as conn:
+        # Check if record exists
+        existing = conn.execute(
+            "SELECT id FROM lawyer_practice_seals WHERE lawyer_id = ? AND practice_year = ?",
+            (lawyer_id, practice_year)
+        ).fetchone()
+        
+        if existing:
+            # Update existing
+            conn.execute(
+                """UPDATE lawyer_practice_seals 
+                   SET bpf_paid = ?, bpf_paid_date = ?, cpd_points = ?, cpd_compliant = ?, aplineligible = ?,
+                       seal_file_key = ?, seal_mime_type = ?, source = ?, source_ref = ?,
+                       verified_by_user_id = ?, verified_on = ?, verification_notes = ?, updated_on = ?
+                   WHERE lawyer_id = ? AND practice_year = ?""",
+                (bpf_paid, bpf_paid_date, cpd_points, cpd_compliant, aplineligible,
+                 seal_file_key, seal_mime_type, source, source_ref,
+                 verified_by_user_id, verified_on, verification_notes, now,
+                 lawyer_id, practice_year)
+            )
+        else:
+            # Insert new
+            conn.execute(
+                """INSERT INTO lawyer_practice_seals 
+                   (lawyer_id, practice_year, bpf_paid, bpf_paid_date, cpd_points, cpd_threshold,
+                    cpd_compliant, aplineligible, seal_file_key, seal_mime_type, seal_expires_at,
+                    source, source_ref, verified_by_user_id, verified_on, verification_notes,
+                    created_on, updated_on)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (lawyer_id, practice_year, bpf_paid, bpf_paid_date, cpd_points, cpd_threshold,
+                 cpd_compliant, aplineligible, seal_file_key, seal_mime_type, seal_expires_at,
+                 source, source_ref, verified_by_user_id, verified_on, verification_notes,
+                 now, now)
+            )
+        
+        # Update lawyers table with latest seal info
+        conn.execute(
+            """UPDATE lawyers SET latest_seal_year = ?, latest_seal_expires_at = ?, seal_badge_visible = ?
+               WHERE id = ?""",
+            (practice_year, seal_expires_at, cpd_compliant, lawyer_id)
+        )
+        
+        # Log seal event
+        action = "seal_updated" if existing else "seal_uploaded"
+        conn.execute(
+            """INSERT INTO seal_events (lawyer_id, practice_year, action, actor_user_id, detail, created_on)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (lawyer_id, practice_year, action, verified_by_user_id,
+             f"Seal {action}: BPF paid={bpf_paid}, CPD points={cpd_points}, compliant={cpd_compliant}",
+             now)
+        )
+        
+        conn.commit()
+        
+        # Fetch and return updated record
+        row = conn.execute(
+            "SELECT * FROM lawyer_practice_seals WHERE lawyer_id = ? AND practice_year = ?",
+            (lawyer_id, practice_year)
+        ).fetchone()
+    
+    return dict(row) if row else {}
+
+
+def get_practice_seal(lawyer_id: str, practice_year: int) -> dict[str, Any] | None:
+    """Get practice seal record for lawyer in specific year."""
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM lawyer_practice_seals WHERE lawyer_id = ? AND practice_year = ?",
+            (lawyer_id, practice_year)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_latest_practice_seal(lawyer_id: str) -> dict[str, Any] | None:
+    """Get lawyer's most recent practice seal (current year or latest available)."""
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM lawyer_practice_seals WHERE lawyer_id = ? ORDER BY practice_year DESC LIMIT 1",
+            (lawyer_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def list_compliant_lawyers(practice_year: int, limit: int = 500) -> list[dict[str, Any]]:
+    """
+    List lawyers with valid CPD-compliant seals for given year.
+    
+    Returns lawyers with:
+    - bpf_paid = true
+    - cpd_points >= 5
+    - seal_expires_at >= today
+    """
+    today = datetime.now(UTC).date().isoformat()
+    
+    with connect() as conn:
+        rows = conn.execute(
+            """SELECT lps.*, l.full_name, l.state, l.rating
+               FROM lawyer_practice_seals lps
+               JOIN lawyers l ON lps.lawyer_id = l.id
+               WHERE lps.practice_year = ? AND lps.cpd_compliant = true 
+                     AND lps.seal_expires_at >= ?
+               ORDER BY l.rating DESC
+               LIMIT ?""",
+            (practice_year, today, limit)
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def list_seal_events(lawyer_id: str, practice_year: int | None = None, limit: int = 100) -> list[dict[str, Any]]:
+    """Get audit trail of seal operations for lawyer."""
+    if practice_year:
+        query = """SELECT * FROM seal_events 
+                   WHERE lawyer_id = ? AND practice_year = ? 
+                   ORDER BY created_on DESC LIMIT ?"""
+        params = (lawyer_id, practice_year, limit)
+    else:
+        query = """SELECT * FROM seal_events 
+                   WHERE lawyer_id = ? 
+                   ORDER BY created_on DESC LIMIT ?"""
+        params = (lawyer_id, limit)
+    
+    with connect() as conn:
+        rows = conn.execute(query, params).fetchall()
+    return [dict(row) for row in rows]
+
+
 def get_user_by_id(user_id: int) -> dict[str, Any] | None:
     with connect() as conn:
         row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()

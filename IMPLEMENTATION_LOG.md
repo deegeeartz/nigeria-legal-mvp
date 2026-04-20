@@ -59,9 +59,11 @@ This file is the single running log of implementation progress for the project.
 ### 2026-04-19 — Admin KYC Automation & PWA Frontend Foundation
 
 #### Summary
+
 - Transformed the manual backend KYC process into an Admin-verified dashboard workflow and established the foundational Next.js Progressive Web App (PWA) client interface.
 
 #### Implemented
+
 - KYC Workflow:
   - Added `kyc_submission_status` (pending/approved/rejected) to `app/models.py`.
   - Added `GET /api/kyc/pending` endpoint for admin dashboard queues.
@@ -82,22 +84,23 @@ This file is the single running log of implementation progress for the project.
   - Added **Asynchronous Webhook** endpoint for payment confirmation.
   - Added **Matter Tracking Workspace**: New tables for legal milestones and progress notes.
   - Implemented **Private/Public Note Logic** for secure lawyer-client collaboration.
-  
 - Frontend (Next.js 15):
   - Created `RealTimeProvider` context for live event streams.
   - Built a **Visual Matter Timeline** for case tracking.
   - Added **Dual-Channel Notes** (Private vs Shared) for professional case management.
   - Integrated **Live Timestamps** across all conversation and tracking threads.
 
-
 #### Validation
+
 - Comprehensive test suite passed (31/31).
 - Webhook-to-WebSocket broadcast chain verified via simulation scripts.
 
 #### Decision Logged
+
 - Decided to pivot NBA automated scraping to an Admin-Approval model due to anti-bot restrictions on the NBA website. Added simulated NIN capabilities for future standard-API hookups (e.g. Dojah).
 
 #### Related Tracker Items
+
 - Completed Phase 1 core backend security requirements and initial UI views.
 
 ---
@@ -105,9 +108,11 @@ This file is the single running log of implementation progress for the project.
 ### 2026-04-19 — Workflow Completion Sweep (Non-Paystack, Non-MFA)
 
 #### Summary
+
 - Completed the remaining MVP workflow gaps across auth UX, KYC submission/review, messaging, consultations, notifications, and admin audit visibility.
 
 #### Implemented
+
 - Auth and account UX:
   - Added role-choice entry screens for `/login` and `/signup` with explicit user paths (`I am a lawyer` / `I am a client`).
   - Added role-specific auth routes: `/login/[role]` and `/signup/[role]` with role-aware styling and routing guard fallback for invalid roles.
@@ -126,6 +131,7 @@ This file is the single running log of implementation progress for the project.
   - Updated navigation to include new user and admin routes, including audit access for admin role.
 
 #### Validation
+
 - Backend test suite: `pytest -q` passing (`35 passed`).
 - Frontend quality checks: `npm run lint` passing with zero lint errors.
 - Added regression coverage for:
@@ -134,34 +140,164 @@ This file is the single running log of implementation progress for the project.
   - consultation status permission flow.
 
 #### Decision Logged
+
 - Deferred implementation remains unchanged for this tranche:
   - real Paystack gateway integration (keep simulation contract active for MVP safety),
   - MFA rollout,
   - backend password-reset token/email flow.
 
 #### Related Tracker Items
+
 - Follow-up tracker sync required to map this tranche into explicit `task-*`/`feat-*` IDs in `implementation_tracker.json`.
 
 ---
 
-### Next Entry Template
+### 2026-04-20 — NDPA Breach Notification SLA Tracking
+
+#### Summary
+
+- Implemented NDPA-compliant breach notification SLA tracking with automated deadline calculation, status monitoring, and admin escalation controls.
+
+#### Implemented
+
+- Database Schema:
+  - Created migration `20260420_0004_breach_sla_tracking.py` adding three new columns to `breach_incidents`:
+    - `notification_deadline` (DateTime, nullable): Calculated 72-hour deadline from breach discovery per NDPA requirements
+    - `escalation_triggered` (Boolean, NOT NULL, default=False): Flag to track admin escalation alerts
+    - `escalation_triggered_at` (DateTime, nullable): Timestamp of when escalation was triggered
+  - Added index `idx_breach_incidents_sla_status` on (notification_deadline, escalation_triggered) for efficient SLA queries
+- Data Models:
+  - Extended `BreachIncidentResponse` with 5 new fields: `notification_deadline`, `escalation_triggered`, `escalation_triggered_at`, `sla_status`, `days_until_deadline`
+  - Created new `BreachSlaStatusResponse` model for SLA-focused list responses with breach metadata and deadline info
+- Database Functions:
+  - `check_breach_sla_status(breach_incident_id)`: Calculates 72-hour deadline if not already set and returns SLA status dict
+  - `list_breach_incidents_by_sla_status(sla_status, limit)`: Lists breaches with enriched deadline/days-remaining info, optionally filtered by SLA status (on-track, at-risk, overdue, notified)
+  - `trigger_breach_escalation(breach_incident_id, actor_user_id)`: Marks escalation flag and logs audit event for admin alert tracking
+- API Endpoints:
+  - `GET /api/compliance/breach-incidents/sla-status`: Lists breach incidents ordered by deadline urgency with optional filtering by SLA status (on-track >1 day, at-risk ≤1 day, overdue <0 days, notified=reported to NDPC)
+  - `POST /api/compliance/breach-incidents/{id}/escalate`: Admin-only endpoint to trigger SLA escalation alerts when deadlines are imminent or missed
+- Response Mapper:
+  - Updated `_to_breach_response()` in router to convert datetime objects to ISO format strings for model compatibility
+  - Added defensive datetime type handling in list function to support both string and datetime object returns from database
+
+#### Validation
+
+- Test Coverage:
+  - `test_breach_sla_tracking`: Validates deadline calculation and status enumeration (on-track, at-risk, overdue)
+  - `test_breach_escalation_admin_only`: Validates admin-only access control and escalation state persistence
+  - `test_breach_sla_filter_by_status`: Validates filtering by SLA status category and deadline ordering
+- Test Results: **46/46 tests passing** (43 baseline + 3 new SLA tests)
+  - No regressions in existing compliance or other test suites
+  - All SLA features production-ready
+- Bug Fixes:
+  - Fixed `trigger_breach_escalation()` audit event function call signature (changed `event_type=` to `action=`)
+  - Fixed datetime type handling in `list_breach_incidents_by_sla_status()` for mixed datetime/string inputs from database
+  - Added ISO string conversion in response mappers for model validation
+
+#### Decision Logged
+
+- SLA Status Categories:
+  - **on-track**: >1 day until deadline (green, no action needed)
+  - **at-risk**: ≤1 day until deadline (yellow, escalation recommended)
+  - **overdue**: <0 days past deadline (red, immediate escalation)
+  - **notified**: Already reported to NDPC (blue, compliance met)
+- 72-hour deadline calculation aligns with NDPA section 27.2 requirement for breach notification to NDPC
+
+#### Related Tracker Items
+
+- Phase-2: NDPA Compliance & Data Governance opened
+- Task-018: Implement breach notification SLA tracking (completed)
+- Feature feat-101: Breach notification SLA tracking (completed)
+
+---
+
+### 2026-04-20 — Annual Stamp & Seal Compliance Badge (Digital Seals)
+
+#### Summary
+
+- Implemented end-to-end annual stamp & seal compliance feature: encrypted private document storage, public trust badge in search and ranking, lawyer self-service upload UI, and admin-only audit download capability.
+
+#### Implemented
+
+- Database Schema:
+  - Created migration `20260420_0005_lawyer_practice_seals.py` adding two new tables:
+    - `lawyer_practice_seals`: Stores annual seal metadata per lawyer/year (BPF paid flag, CPD points, seal file storage key, MIME type, verification status, badge visibility)
+    - `seal_events`: Audit trail for all seal lifecycle events (upload, verify, download) with actor and timestamp
+- Database Functions:
+  - `upsert_practice_seal`: Insert or update a lawyer's seal record for a given year
+  - `get_practice_seal`: Fetch a single seal record by lawyer/year
+  - `get_latest_practice_seal`: Fetch the most recent seal for a lawyer
+  - `list_compliant_lawyers`: List all lawyers with valid seals for a given year
+  - `list_seal_events`: Paginated audit trail for seal operations
+- API Endpoints (`app/routers/compliance.py`):
+  - `POST /api/compliance/practice-seal/upload`: Admin-only; accepts seal document file, scans for malware, encrypts at rest, persists metadata
+  - `GET /api/compliance/practice-seal/check`: Lawyer self-check for own seal/badge status
+  - `GET /api/compliance/practice-seal/{lawyer_id}`: Public seal status by lawyer ID
+  - `GET /api/compliance/practising-list`: Admin-accessible list of all compliant lawyers
+  - `POST /api/compliance/practice-seal/{lawyer_id}/verify`: Admin manual verification action
+  - `GET /api/compliance/practice-seal/{lawyer_id}/audit-trail`: Admin audit trail for a lawyer's seal history
+  - `GET /api/compliance/practice-seal/{lawyer_id}/document/download`: Admin-only; decrypts and streams original seal file with Content-Disposition headers; logs audit event on every access
+- Encryption at Rest:
+  - Added `cryptography==42.0.8` to `requirements.txt`
+  - Added `encrypt_seal_bytes` / `decrypt_seal_bytes` Fernet helpers and `SealEncryptionError` to `app/security.py`
+  - Added `SEAL_ENCRYPTION_KEY` config in `app/settings.py` with secure fallback derivation from app secret for dev continuity
+  - Updated `.env.example` with `SEAL_ENCRYPTION_KEY` entry
+  - Seal bytes are always encrypted before writing to disk; plaintext is never persisted
+- Ranking Integration (`app/ranking.py`):
+  - Added CPD-compliant seal trust bonus to scoring engine
+  - Appended `Seal & Stamp {year}` badge to matching lawyer profiles
+- Frontend (Next.js):
+  - Added lawyer seal upload page at `/lawyer/seal` (`frontend/src/app/lawyer/seal/page.js`)
+  - Added **Seal** nav entry to `Navigation.js`
+  - Added annual stamp/seal workflow shortcut card to `dashboard/page.js`
+  - Updated search results page to render seal icon when the `Seal & Stamp` badge is present
+
+#### Validation
+
+- Test Coverage Added (`tests/test_compliance.py`):
+  - `test_practice_seal_file_is_encrypted_at_rest`: Confirms disk bytes differ from uploaded plaintext and decrypt correctly
+  - `test_admin_can_download_decrypted_seal_document`: Confirms returned bytes match original upload with correct headers
+  - `test_non_admin_cannot_download_seal_document`: Confirms `403` for non-admin users
+- Test Results: **23/23 tests passing** (compliance 19, ranking 4) — no regressions
+- Authorization hardened: upload and download endpoints reject non-admin callers with `403`
+
+#### Decision Logged
+
+- Seal documents are always stored encrypted (Fernet symmetric encryption). The public profile shows only a trust badge icon (`Seal & Stamp {year}`) — no document is ever visible to clients or the public.
+- Admin download endpoint is audited: every access is recorded in `seal_events` for NDPA accountability.
+
+#### Related Tracker Items
+
+- Task-019: Annual stamp & seal schema and API layer (completed)
+- Task-020: Seal trust badge in ranking and search (completed)
+- Task-021: Lawyer seal upload UI and encryption at rest (completed)
+- Task-022: Admin seal document download endpoint and tests (completed)
+- Feature feat-102: Annual Stamp & Seal compliance badge (completed)
+
+---
+
 
 ```markdown
 ### YYYY-MM-DD — <Short Milestone Title>
 
 #### Summary
+
 - ...
 
 #### Implemented
+
 - ...
 
 #### Validation
+
 - ...
 
 #### Decision Logged
+
 - ...
 
 #### Related Tracker Items
+
 - ...
 ```
 

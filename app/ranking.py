@@ -103,6 +103,13 @@ def _build_component_scores(lawyer: Lawyer, intake: IntakeRequest, category: str
         trust_verification += 20
     if lawyer.bvn_verified:
         trust_verification += 5
+    
+    # Add seal & stamp bonus (+10 points) if lawyer is CPD-compliant
+    from app.db import get_latest_practice_seal
+    seal = get_latest_practice_seal(lawyer.id)
+    if seal and seal.get("cpd_compliant"):
+        trust_verification += 10
+    
     trust_verification = min(100.0, trust_verification)
 
     quality_outcomes = (
@@ -199,10 +206,19 @@ def rank_lawyers(intake: IntakeRequest, lawyers: List[Lawyer], top_n: int = 10) 
 
     matches = []
     for lawyer, total, _ in selected:
+        from app.db import get_latest_practice_seal
+        
         tier = expertise_tier(lawyer)
         badges = [tier.value.replace("_", " ").title(), "NIN Verified", "NBA Verified"]
         if lawyer.bvn_verified:
             badges.append("BVN Verified")
+        
+        # Add seal badge if lawyer is CPD-compliant
+        seal = get_latest_practice_seal(lawyer.id)
+        if seal and seal.get("cpd_compliant"):
+            seal_year = seal.get("practice_year", "")
+            badges.append(f"Seal & Stamp {seal_year}")
+        
         matches.append(
             {
                 "lawyer_id": lawyer.id,

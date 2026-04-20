@@ -52,6 +52,9 @@ class Lawyer:
     verification_document_id: int | None = None
     kyc_submission_status: str = "none"  # none | pending | approved | rejected
     nin: str | None = None
+    latest_seal_year: int | None = None
+    latest_seal_expires_at: str | None = None
+    seal_badge_visible: bool = False
 
 
 class IntakeRequest(BaseModel):
@@ -529,5 +532,41 @@ class BreachSlaStatusResponse(BaseModel):
     sla_status: str  # "on-track", "at-risk" (< 24h), "overdue", "notified"
     escalation_triggered: bool
     reported_to_ndpc: bool
+
+
+class PracticeSealUploadRequest(BaseModel):
+    """Upload NBA-mandated digital practice seal for annual renewal."""
+    practice_year: int = Field(ge=2025, le=2030)
+    bpf_paid: bool = Field(default=True, description="BPF annual practising list payment confirmed")
+    bpf_paid_date: str | None = Field(default=None, description="ISO date of BPF payment (YYYY-MM-DD)")
+    cpd_points: int = Field(ge=0, le=100, default=0, description="Accumulated CPD points for year")
+    verification_notes: str = Field(max_length=500, default="", description="Admin notes on seal verification")
+
+
+class PracticeSealResponse(BaseModel):
+    """Digital practice seal verification and compliance status."""
+    lawyer_id: str
+    practice_year: int
+    bpf_paid: bool
+    cpd_points: int
+    cpd_compliant: bool  # True if bpf_paid AND cpd_points >= 5
+    aplineligible: bool  # True if bpf_paid (Annual Practising List eligible)
+    seal_uploaded_at: str | None
+    seal_expires_at: str | None
+    verified_on: str | None
+    verified_by_user_id: int | None
+    source: str  # "manual", "nba_api", "csv_import", "admin_override"
+    created_on: str
+    updated_on: str
+
+
+class PracticeSealCheckResponse(BaseModel):
+    """Quick check of lawyer's current seal status."""
+    lawyer_id: str
+    has_valid_seal: bool  # seal_expires_at > now
+    seal_year: int | None
+    cpd_compliant: bool
+    apl_eligible: bool
+    seal_badge_visible: bool  # show badge on profile
 
 

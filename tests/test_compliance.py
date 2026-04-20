@@ -422,4 +422,473 @@ def test_breach_sla_filter_by_status() -> None:
     assert any(b["breach_incident_id"] == incident1_id and b["sla_status"] == "notified" for b in notified)
 
 
+# ===== PRACTICE SEAL & APL/CPD COMPLIANCE TESTS =====
 
+def test_practice_seal_upload_and_check() -> None:
+    """Test uploading practice seal (BPF + CPD compliance data)."""
+    admin_auth = _login_admin()
+    
+    # Get first seed lawyer via intake/match
+    search_response = client.post(
+        "/api/intake/match",
+        json={
+            "summary": "Contract review needed",
+            "state": "Lagos",
+            "urgency": "this_week",
+            "budget_max_ngn": 500000,
+            "legal_terms_mode": False,
+        },
+        headers={"X-Auth-Token": admin_auth["access_token"]},
+    )
+    assert search_response.status_code == 200
+    matches = search_response.json()["matches"]
+    assert len(matches) > 0
+    lawyer_id = matches[0]["lawyer_id"]
+    
+    # Upload seal for 2026
+    seal_response = client.post(
+        f"/api/compliance/practice-seal/upload",
+        params={
+            "lawyer_id": lawyer_id,
+            "practice_year": 2026,
+            "bpf_paid": True,
+            "cpd_points": 7,
+        },
+        headers={"X-Auth-Token": admin_auth["access_token"]},
+    )
+    assert seal_response.status_code == 200
+    seal_data = seal_response.json()
+    assert seal_data["lawyer_id"] == lawyer_id
+    assert seal_data["practice_year"] == 2026
+    assert seal_data["bpf_paid"] is True
+    assert seal_data["cpd_points"] == 7
+    assert seal_data["cpd_compliant"] is True  # bpf_paid AND cpd_points >= 5
+    assert seal_data["aplineligible"] is True  # bpf_paid
+    
+    # Check seal status (public endpoint, no auth)
+    check_response = client.get(f"/api/compliance/practice-seal/check?lawyer_id={lawyer_id}")
+    assert check_response.status_code == 200
+    check_data = check_response.json()
+    assert check_data["has_valid_seal"] is True
+    assert check_data["cpd_compliant"] is True
+    assert check_data["apl_eligible"] is True
+
+
+def test_practice_seal_non_compliant() -> None:
+    """Test seal when CPD points below threshold."""
+    admin_auth = _login_admin()
+    
+    search_response = client.post(
+        "/api/intake/match",
+        json={
+            "summary": "Litigation support needed",
+            "state": "Lagos",
+            "urgency": "urgent",
+            "budget_max_ngn": 1000000,
+            "legal_terms_mode": False,
+        },
+        headers={"X-Auth-Token": admin_auth["access_token"]},
+    )
+    matches = search_response.json()["matches"]
+    lawyer_id = matches[0]["lawyer_id"]
+    
+    # Upload seal with insufficient CPD points
+    seal_response = client.post(
+        f"/api/compliance/practice-seal/upload",
+        params={
+            "lawyer_id": lawyer_id,
+            "practice_year": 2026,
+            "bpf_paid": True,
+            "cpd_points": 3,  # Below 5 threshold
+        },
+        headers={"X-Auth-Token": admin_auth["access_token"]},
+    )
+    assert seal_response.status_code == 200
+    seal_data = seal_response.json()
+    assert seal_data["cpd_compliant"] is False  # cpd_points < 5
+    assert seal_data["aplineligible"] is True  # BPF paid
+    
+    # Check seal status
+    check_response = client.get(f"/api/compliance/practice-seal/check?lawyer_id={lawyer_id}")
+    check_data = check_response.json()
+    assert check_data["has_valid_seal"] is False  # Not compliant despite BPF
+
+
+def test_apl_list_compliant_lawyers() -> None:
+    """Test listing compliant lawyers (Annual Practising List equivalent)."""
+    admin_auth = _login_admin()
+    
+    # Upload seals for two lawyers
+    search_response = client.post(
+        "/api/intake/match",
+        json={
+            "summary": "Business law help needed",
+            "state": "Lagos",
+            "urgency": "this_week",
+            "budget_max_ngn": 750000,
+            "legal_terms_mode": False,
+        },
+        headers={"X-Auth-Token": admin_auth["access_token"]},
+    )
+    matches = search_response.json()["matches"]
+    assert len(matches) >= 2
+    
+    lawyer1_id = matches[0]["lawyer_id"]
+    lawyer2_id = matches[1]["lawyer_id"]
+    
+    # Make lawyer1 compliant
+    client.post(
+        f"/api/compliance/practice-seal/upload",
+        params={
+            "lawyer_id": lawyer1_id,
+            "practice_year": 2026,
+            "bpf_paid": True,
+            "cpd_points": 5,
+        },
+        headers={"X-Auth-Token": admin_auth["access_token"]},
+    )
+    
+    # Make lawyer2 non-compliant (no BPF)
+    client.post(
+        f"/api/compliance/practice-seal/upload",
+        params={
+            "lawyer_id": lawyer2_id,
+            "practice_year": 2026,
+            "bpf_paid": False,
+            "cpd_points": 7,
+        },
+        headers={"X-Auth-Token": admin_auth["access_token"]},
+    )
+    
+    # List APL compliant
+    apl_response = client.get("/api/compliance/practising-list?practice_year=2026&limit=500")
+    assert apl_response.status_code == 200
+    apl_list = apl_response.json()
+    
+    # lawyer1 should be in list
+    lawyer1_in_list = any(l["lawyer_id"] == lawyer1_id for l in apl_list)
+    assert lawyer1_in_list
+    
+    # lawyer2 should NOT be in list (not bpf_paid)
+    lawyer2_in_list = any(l["lawyer_id"] == lawyer2_id for l in apl_list)
+    assert not lawyer2_in_list
+
+
+def test_admin_verify_practice_seal() -> None:
+    """Test admin verification of practice seal (sets verified_on, verified_by_user_id)."""
+    admin_auth = _login_admin()
+    
+    search_response = client.post(
+        "/api/intake/match",
+        json={
+            "summary": "Corporate counsel advice",
+            "state": "Lagos",
+            "urgency": "researching",
+            "budget_max_ngn": 2000000,
+            "legal_terms_mode": False,
+        },
+        headers={"X-Auth-Token": admin_auth["access_token"]},
+    )
+    matches = search_response.json()["matches"]
+    lawyer_id = matches[0]["lawyer_id"]
+    
+    # Admin verifies seal (e.g., after checking NBA source)
+    verify_response = client.post(
+        f"/api/compliance/practice-seal/{lawyer_id}/verify",
+        params={
+            "practice_year": 2026,
+            "bpf_paid": True,
+            "cpd_points": 6,
+            "verification_notes": "Verified via NBA records",
+        },
+        headers={"X-Auth-Token": admin_auth["access_token"]},
+    )
+    assert verify_response.status_code == 200
+    verify_data = verify_response.json()
+    assert verify_data["lawyer_id"] == lawyer_id
+    assert verify_data["cpd_compliant"] is True
+    assert verify_data["verified_by_user_id"] is not None
+    assert "Seal verified for" in verify_data["message"]
+
+
+def test_practice_seal_audit_trail() -> None:
+    """Test seal audit trail (seal_events records all actions)."""
+    admin_auth = _login_admin()
+    
+    search_response = client.post(
+        "/api/intake/match",
+        json={
+            "summary": "Employment law question",
+            "state": "Lagos",
+            "urgency": "this_week",
+            "budget_max_ngn": 300000,
+            "legal_terms_mode": False,
+        },
+        headers={"X-Auth-Token": admin_auth["access_token"]},
+    )
+    matches = search_response.json()["matches"]
+    lawyer_id = matches[0]["lawyer_id"]
+    
+    # Upload seal (creates seal_events record)
+    client.post(
+        f"/api/compliance/practice-seal/upload",
+        params={
+            "lawyer_id": lawyer_id,
+            "practice_year": 2026,
+            "bpf_paid": True,
+            "cpd_points": 5,
+        },
+        headers={"X-Auth-Token": admin_auth["access_token"]},
+    )
+    
+    # Get audit trail
+    audit_response = client.get(
+        f"/api/compliance/practice-seal/{lawyer_id}/audit-trail?practice_year=2026",
+        headers={"X-Auth-Token": admin_auth["access_token"]},
+    )
+    assert audit_response.status_code == 200
+    events = audit_response.json()
+    assert len(events) > 0
+    
+    # Should have seal_uploaded event
+    upload_event = next((e for e in events if e["action"] == "seal_uploaded"), None)
+    assert upload_event is not None
+    assert "BPF paid=True" in upload_event["detail"]
+
+
+def test_seal_badge_in_lawyer_matches() -> None:
+    """Test that seal badge appears in lawyer matching results if compliant."""
+    admin_auth = _login_admin()
+    
+    # Get lawyers
+    search_response = client.post(
+        "/api/intake/match",
+        json={
+            "summary": "Property law advice",
+            "state": "Lagos",
+            "urgency": "this_week",
+            "budget_max_ngn": 600000,
+            "legal_terms_mode": False,
+        },
+        headers={"X-Auth-Token": admin_auth["access_token"]},
+    )
+    matches = search_response.json()["matches"]
+    assert len(matches) >= 1
+    
+    lawyer_id = matches[0]["lawyer_id"]
+    
+    # Make lawyer compliant
+    client.post(
+        f"/api/compliance/practice-seal/upload",
+        params={
+            "lawyer_id": lawyer_id,
+            "practice_year": 2026,
+            "bpf_paid": True,
+            "cpd_points": 6,
+        },
+        headers={"X-Auth-Token": admin_auth["access_token"]},
+    )
+    
+    # Search for lawyers again (should include seal badge)
+    search_response2 = client.post(
+        "/api/intake/match",
+        json={
+            "summary": "Property dispute resolution",
+            "state": "Lagos",
+            "urgency": "urgent",
+            "budget_max_ngn": 500000,
+            "legal_terms_mode": False,
+        },
+        headers={"X-Auth-Token": admin_auth["access_token"]},
+    )
+    assert search_response2.status_code == 200
+    results = search_response2.json()
+    
+    # Find our lawyer in results
+    our_lawyer = next((m for m in results["matches"] if m["lawyer_id"] == lawyer_id), None)
+    if our_lawyer:
+        # Check if seal badge is present
+        seal_badge = next((b for b in our_lawyer.get("badges", []) if "Seal & Stamp" in b), None)
+        assert seal_badge is not None
+        assert "2026" in seal_badge
+
+
+def test_seal_authorization_controls() -> None:
+    """Test that non-admin users cannot upload seals for other lawyers."""
+    # Create a client user
+    client_response = client.post(
+        "/api/auth/signup",
+        json={
+            "email": "seal.client@example.com",
+            "password": "SecurePass123!",
+            "full_name": "Seal Test Client",
+            "role": "client",
+        },
+    )
+    assert client_response.status_code == 200
+    client_auth = client_response.json()
+    
+    admin_auth = _login_admin()
+    
+    # Use a seed lawyer from the data
+    lawyer_id = "lw_001"  # First seed lawyer
+    
+    
+    # Client tries to upload seal for a lawyer (should fail)
+    seal_response = client.post(
+        f"/api/compliance/practice-seal/upload",
+        params={
+            "lawyer_id": lawyer_id,
+            "practice_year": 2026,
+            "bpf_paid": True,
+            "cpd_points": 5,
+        },
+        headers={"X-Auth-Token": client_auth["access_token"]},
+    )
+    # Client should either fail auth or get forbidden (non-admin)
+    # Note: upload endpoint may accept clients but auth system rejects them
+    assert seal_response.status_code in [403, 401, 422]  # Forbidden, Unauthorized, or Invalid
+        
+    # But admin can upload for any lawyer
+    seal_response_admin = client.post(
+        f"/api/compliance/practice-seal/upload",
+        params={
+            "lawyer_id": lawyer_id,
+            "practice_year": 2026,
+            "bpf_paid": True,
+            "cpd_points": 5,
+        },
+        headers={"X-Auth-Token": admin_auth["access_token"]},
+    )
+    # Admin should succeed
+    assert seal_response_admin.status_code == 200
+
+
+def test_practice_seal_file_is_encrypted_at_rest() -> None:
+    admin_auth = _login_admin()
+
+    search_response = client.post(
+        "/api/intake/match",
+        json={
+            "summary": "Need corporate legal review for 2026 filings.",
+            "state": "Lagos",
+            "urgency": "this_week",
+            "budget_max_ngn": 700000,
+            "legal_terms_mode": False,
+        },
+        headers={"X-Auth-Token": admin_auth["access_token"]},
+    )
+    assert search_response.status_code == 200
+    lawyer_id = search_response.json()["matches"][0]["lawyer_id"]
+
+    raw_file_bytes = b"%PDF-1.4\nStampAndSeal2026\n%%EOF"
+    upload_response = client.post(
+        "/api/compliance/practice-seal/upload",
+        params={
+            "lawyer_id": lawyer_id,
+            "practice_year": 2026,
+            "bpf_paid": True,
+            "cpd_points": 8,
+        },
+        headers={"X-Auth-Token": admin_auth["access_token"]},
+        files={"seal_document": ("seal.pdf", raw_file_bytes, "application/pdf")},
+    )
+    assert upload_response.status_code == 200
+
+    from app.db import UPLOADS_DIR, get_practice_seal
+    from app.security import decrypt_seal_bytes
+
+    stored_record = get_practice_seal(lawyer_id, 2026)
+    assert stored_record is not None
+    storage_key = stored_record["seal_file_key"]
+    assert storage_key is not None
+
+    encrypted_path = UPLOADS_DIR / storage_key
+    assert encrypted_path.exists()
+    encrypted_bytes = encrypted_path.read_bytes()
+
+    assert encrypted_bytes != raw_file_bytes
+    assert decrypt_seal_bytes(encrypted_bytes) == raw_file_bytes
+
+
+def test_admin_can_download_decrypted_seal_document() -> None:
+    admin_auth = _login_admin()
+
+    search_response = client.post(
+        "/api/intake/match",
+        json={
+            "summary": "Need legal review for annual compliance filings.",
+            "state": "Lagos",
+            "urgency": "this_week",
+            "budget_max_ngn": 700000,
+            "legal_terms_mode": False,
+        },
+        headers={"X-Auth-Token": admin_auth["access_token"]},
+    )
+    assert search_response.status_code == 200
+    lawyer_id = search_response.json()["matches"][0]["lawyer_id"]
+
+    raw_file_bytes = b"%PDF-1.4\nAdminDownloadSeal2026\n%%EOF"
+    upload_response = client.post(
+        "/api/compliance/practice-seal/upload",
+        params={
+            "lawyer_id": lawyer_id,
+            "practice_year": 2026,
+            "bpf_paid": True,
+            "cpd_points": 8,
+        },
+        headers={"X-Auth-Token": admin_auth["access_token"]},
+        files={"seal_document": ("seal.pdf", raw_file_bytes, "application/pdf")},
+    )
+    assert upload_response.status_code == 200
+
+    download_response = client.get(
+        f"/api/compliance/practice-seal/{lawyer_id}/document/download",
+        params={"practice_year": 2026},
+        headers={"X-Auth-Token": admin_auth["access_token"]},
+    )
+
+    assert download_response.status_code == 200
+    assert download_response.content == raw_file_bytes
+    assert "application/pdf" in download_response.headers.get("content-type", "")
+    assert "attachment; filename=\"stamp_seal_" in download_response.headers.get("content-disposition", "")
+
+
+def test_non_admin_cannot_download_seal_document() -> None:
+    admin_auth = _login_admin()
+    client_auth = _signup_client()
+
+    search_response = client.post(
+        "/api/intake/match",
+        json={
+            "summary": "Need legal review for annual compliance filings.",
+            "state": "Lagos",
+            "urgency": "this_week",
+            "budget_max_ngn": 700000,
+            "legal_terms_mode": False,
+        },
+        headers={"X-Auth-Token": admin_auth["access_token"]},
+    )
+    assert search_response.status_code == 200
+    lawyer_id = search_response.json()["matches"][0]["lawyer_id"]
+
+    upload_response = client.post(
+        "/api/compliance/practice-seal/upload",
+        params={
+            "lawyer_id": lawyer_id,
+            "practice_year": 2026,
+            "bpf_paid": True,
+            "cpd_points": 8,
+        },
+        headers={"X-Auth-Token": admin_auth["access_token"]},
+        files={"seal_document": ("seal.pdf", b"%PDF-1.4\nRoleCheck\n%%EOF", "application/pdf")},
+    )
+    assert upload_response.status_code == 200
+
+    download_response = client.get(
+        f"/api/compliance/practice-seal/{lawyer_id}/document/download",
+        params={"practice_year": 2026},
+        headers={"X-Auth-Token": client_auth["access_token"]},
+    )
+
+    assert download_response.status_code == 403

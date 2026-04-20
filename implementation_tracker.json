@@ -1,6 +1,6 @@
 {
   "project": "Nigeria Legal Marketplace MVP",
-  "last_updated": "2026-04-17",
+  "last_updated": "2026-04-20T23:59",
   "phases": [
     {
       "id": "phase-1",
@@ -189,6 +189,67 @@
           "owner": "copilot",
           "updated_on": "2026-04-17",
           "notes": "Added UAT runner script, scenario docs, and validated workflow-heavy test suites."
+        }
+      ]
+    },
+    {
+      "id": "phase-2",
+      "name": "NDPA Compliance & Data Governance",
+      "status": "in-progress",
+      "features": [
+        {
+          "id": "feat-101",
+          "name": "Breach notification SLA tracking",
+          "status": "completed",
+          "notes": "72-hour NDPA deadline calculation, status monitoring, and admin escalation"
+        },
+        {
+          "id": "feat-102",
+          "name": "Annual Stamp & Seal compliance badge",
+          "status": "completed",
+          "notes": "Encrypted seal file upload (Fernet at-rest), public trust badge in search/ranking, lawyer upload UI, admin audit/download endpoint"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "task-018",
+          "title": "Implement breach notification SLA tracking",
+          "status": "completed",
+          "owner": "copilot",
+          "updated_on": "2026-04-20",
+          "notes": "Added SLA deadline fields (notification_deadline, escalation_triggered, escalation_triggered_at) to breach_incidents table via migration 20260420_0004. Extended BreachIncidentResponse and BreachSlaStatusResponse models with SLA fields. Implemented DB functions: check_breach_sla_status (deadline calculation), list_breach_incidents_by_sla_status (filtering by SLA status), trigger_breach_escalation (admin alert escalation). Added API endpoints: GET /api/compliance/breach-incidents/sla-status (list breaches by deadline urgency), POST /api/compliance/breach-incidents/{id}/escalate (admin-only escalation trigger). Full test coverage with test_breach_sla_tracking, test_breach_escalation_admin_only, test_breach_sla_filter_by_status. All 46 tests passing (43 baseline + 3 new SLA tests). Fixed datetime type handling and audit event function signature issues."
+        },
+        {
+          "id": "task-019",
+          "title": "Annual stamp & seal schema and API layer",
+          "status": "completed",
+          "owner": "copilot",
+          "updated_on": "2026-04-20",
+          "notes": "Created migration 20260420_0005 adding lawyer_practice_seals and seal_events tables. Added seal CRUD and listing DB functions. Added POST /api/compliance/practice-seal/upload, GET /api/compliance/practice-seal/check, GET /api/compliance/practice-seal/{lawyer_id}, GET /api/compliance/practising-list, POST /api/compliance/practice-seal/{lawyer_id}/verify, GET /api/compliance/practice-seal/{lawyer_id}/audit-trail. Wired malware scanning on seal upload."
+        },
+        {
+          "id": "task-020",
+          "title": "Seal trust badge in ranking and search",
+          "status": "completed",
+          "owner": "copilot",
+          "updated_on": "2026-04-20",
+          "notes": "Added CPD-compliant seal trust bonus to ranking engine. Appended 'Seal & Stamp {year}' badge to compliant lawyer profiles. Updated frontend search page to render seal icon when badge is present."
+        },
+        {
+          "id": "task-021",
+          "title": "Lawyer seal upload UI and encryption at rest",
+          "status": "completed",
+          "owner": "copilot",
+          "updated_on": "2026-04-20",
+          "notes": "Added cryptography==42.0.8 dependency. Added encrypt_seal_bytes/decrypt_seal_bytes Fernet helpers and SealEncryptionError in app/security.py. Added SEAL_ENCRYPTION_KEY config in app/settings.py with fallback derivation. Updated upload endpoint to encrypt file bytes before writing to disk. Added frontend lawyer seal upload page at /lawyer/seal. Added Seal nav entry in Navigation.js and dashboard shortcut card. Added .env.example entry for SEAL_ENCRYPTION_KEY."
+        },
+        {
+          "id": "task-022",
+          "title": "Admin seal document download endpoint and tests",
+          "status": "completed",
+          "owner": "copilot",
+          "updated_on": "2026-04-20",
+          "notes": "Added admin-only GET /api/compliance/practice-seal/{lawyer_id}/document/download endpoint. Decrypts stored Fernet bytes and streams original file to admin with correct content-type and Content-Disposition headers. Logs audit event on every download. Added test_admin_can_download_decrypted_seal_document and test_non_admin_cannot_download_seal_document. Full suite: 23/23 tests passing (compliance 19, ranking 4)."
         }
       ]
     }
@@ -545,6 +606,145 @@
         "refs": [
           "task-017"
         ]
+      },
+      {
+        "date": "2026-04-20",
+        "type": "phase_opened",
+        "summary": "Phase-2: NDPA Compliance & Data Governance",
+        "refs": [
+          "phase-2"
+        ]
+      },
+      {
+        "date": "2026-04-20",
+        "type": "task_added",
+        "summary": "Added task-018: Implement breach notification SLA tracking",
+        "refs": [
+          "task-018",
+          "phase-2",
+          "feat-101"
+        ]
+      },
+      {
+        "date": "2026-04-20",
+        "type": "database_migration",
+        "summary": "Created and applied migration 20260420_0004: Added SLA deadline tracking to breach_incidents (notification_deadline, escalation_triggered, escalation_triggered_at columns with index)",
+        "refs": [
+          "task-018"
+        ]
+      },
+      {
+        "date": "2026-04-20",
+        "type": "feature_development",
+        "summary": "Implemented SLA deadline calculation: NDPA requires 72-hour notification to NDPC from breach discovery",
+        "refs": [
+          "task-018",
+          "feat-101"
+        ]
+      },
+      {
+        "date": "2026-04-20",
+        "type": "api_endpoint_added",
+        "summary": "Added GET /api/compliance/breach-incidents/sla-status: Lists breach incidents ordered by deadline urgency with filtering (on-track, at-risk, overdue, notified)",
+        "refs": [
+          "task-018"
+        ]
+      },
+      {
+        "date": "2026-04-20",
+        "type": "api_endpoint_added",
+        "summary": "Added POST /api/compliance/breach-incidents/{id}/escalate: Admin-only endpoint to trigger SLA escalation alerts",
+        "refs": [
+          "task-018"
+        ]
+      },
+      {
+        "date": "2026-04-20",
+        "type": "testing",
+        "summary": "Added 3 new SLA compliance tests: test_breach_sla_tracking, test_breach_escalation_admin_only, test_breach_sla_filter_by_status",
+        "refs": [
+          "task-018"
+        ]
+      },
+      {
+        "date": "2026-04-20",
+        "type": "bug_fixed",
+        "summary": "Fixed datetime type handling in SLA list function and audit event function signature mismatch",
+        "refs": [
+          "task-018"
+        ]
+      },
+      {
+        "date": "2026-04-20",
+        "type": "status_change",
+        "summary": "task-018 -> completed",
+        "refs": [
+          "task-018",
+          "feat-101"
+        ]
+      },
+      {
+        "date": "2026-04-20",
+        "type": "testing",
+        "summary": "Full test suite validation: 46/46 tests passing (43 baseline + 3 new SLA tests). No regressions. SLA tracking feature production-ready.",
+        "refs": [
+          "task-018",
+          "phase-2"
+        ]
+      },
+      {
+        "date": "2026-04-20",
+        "type": "feature_development",
+        "summary": "Started Annual Stamp & Seal compliance feature: schema, API layer, malware scan on upload",
+        "refs": ["task-019", "feat-102"]
+      },
+      {
+        "date": "2026-04-20",
+        "type": "database_migration",
+        "summary": "Created and applied migration 20260420_0005: Added lawyer_practice_seals and seal_events tables",
+        "refs": ["task-019"]
+      },
+      {
+        "date": "2026-04-20",
+        "type": "api_endpoint_added",
+        "summary": "Added 6 seal compliance endpoints: upload, check, get, practising-list, verify, audit-trail",
+        "refs": ["task-019"]
+      },
+      {
+        "date": "2026-04-20",
+        "type": "feature_development",
+        "summary": "Integrated Stamp & Seal trust badge into ranking engine and search results display",
+        "refs": ["task-020", "feat-102"]
+      },
+      {
+        "date": "2026-04-20",
+        "type": "security",
+        "summary": "Implemented Fernet encryption-at-rest for seal document files. Added SEAL_ENCRYPTION_KEY config. Seal bytes are encrypted on upload and never stored in plaintext.",
+        "refs": ["task-021"]
+      },
+      {
+        "date": "2026-04-20",
+        "type": "feature_development",
+        "summary": "Added lawyer-facing seal upload page (/lawyer/seal), Navigation.js entry, and dashboard shortcut card",
+        "refs": ["task-021"]
+      },
+      {
+        "date": "2026-04-20",
+        "type": "api_endpoint_added",
+        "summary": "Added admin-only GET /api/compliance/practice-seal/{lawyer_id}/document/download: decrypts and streams original seal file with audit logging",
+        "refs": ["task-022"]
+      },
+      {
+        "date": "2026-04-20",
+        "type": "testing",
+        "summary": "Added seal encryption-at-rest test and admin download tests. Full suite: 23/23 passing (compliance 19, ranking 4). No regressions.",
+        "refs": ["task-019", "task-020", "task-021", "task-022", "feat-102"]
+      },
+      {
+        "date": "2026-04-20",
+        "type": "status_change",
+        "summary": "task-019, task-020, task-021, task-022 -> completed; feat-102 -> completed",
+        "refs": ["task-019", "task-020", "task-021", "task-022", "feat-102"]
       }
     ],
     "decisions": [
@@ -597,7 +797,10 @@
     "next_focus": [
       "Integrate real Paystack APIs and webhook signature verification.",
       "Add out-of-band delivery channels (email/SMS) for notifications.",
-      "Ship frontend workflows for notifications, payments, and document management."
+      "Ship frontend workflows for notifications, payments, and document management.",
+      "Add admin UI action to trigger seal document download from dashboard.",
+      "Extend seal badge to lawyer public profile page.",
+      "Automate SEAL_ENCRYPTION_KEY rotation with re-encryption script."
     ]
   }
 }
