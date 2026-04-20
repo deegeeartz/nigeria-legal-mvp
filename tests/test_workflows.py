@@ -77,6 +77,7 @@ def test_conversation_and_message_flow() -> None:
 
 def test_consultation_booking_and_paystack_verification(monkeypatch: pytest.MonkeyPatch) -> None:
     client_auth = _signup_client()
+    lawyer_auth = _login_lawyer()
     call_state = {"initialize_called": False, "verify_called": False}
 
     def _mock_paystack_request(method: str, url: str, **kwargs) -> _MockPaystackResponse:
@@ -130,7 +131,7 @@ def test_consultation_booking_and_paystack_verification(monkeypatch: pytest.Monk
 
     verify = client.post(
         "/api/payments/paystack/PSK_REF_WORKFLOW_1/verify",
-        headers={"X-Auth-Token": client_auth["access_token"]},
+        headers={"X-Auth-Token": lawyer_auth["access_token"]},
     )
     assert verify.status_code == 200
     assert verify.json()["payment_id"] == payment_id
