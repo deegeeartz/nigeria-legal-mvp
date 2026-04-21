@@ -4,7 +4,7 @@
 **Test Suite**: 53 passed, 0 warnings ✅  
 **Branch**: `main`
 
-> **Note — Review Accuracy**: This document was re-verified on April 21, 2026 against the live codebase after edits to `app/main.py`, `app/ranking.py`, `app/routers/system.py`, `app/services/`, `app/repos/lawyers.py`, and `app/settings.py`. Several items previously listed as gaps have since been implemented and are marked accordingly.
+> **Note — Review Accuracy**: This document was re-verified on April 21, 2026 against the live codebase after edits to `app/main.py`, `app/ranking.py`, `app/routers/system.py`, `app/routers/consultations.py`, `app/repos/consultations.py`, `app/services/`, `app/repos/lawyers.py`, `app/models.py`, and `app/settings.py`. Several items previously listed as gaps have since been implemented and are marked accordingly.
 
 ---
 
@@ -43,6 +43,9 @@
 - **NBA disciplinary CSV sync** — `POST /api/admin/sync/nba-disciplinary` accepts CSV (`lawyer_id,severe_flag,active_complaints`) and bulk-updates disciplinary status via `app/services/admin_service.py`
 - **Engagement letter generator** — `app/services/document_service.py` generates a `fpdf2` PDF engagement letter on consultation booking, satisfying NBA RPC Rule 10; stored as a consultation document
 - **Court type + legal system intake filters** — `court_type` and `legal_system` fields on `IntakeRequest` propagate through `rank_lawyers` to filter the pool before scoring
+- **Conflict-of-interest check** — `check_conflict()` in `repos/consultations.py` queries prior consultations by opposing party name; a `consultation.conflict_alert` audit event is logged automatically on booking if a match is found
+- **Contingency fee arrangements** — `ConsultationCreateRequest` accepts `is_contingency` + `contingency_percentage`; `POST /api/consultations/{id}/success-fee` calculates and invoices the success fee when the matter concludes
+- **VAT on payments** — `PaymentResponse` includes `vat_amount_ngn` and `total_plus_vat_ngn` fields; 7.5% Nigerian VAT calculated at payment creation
 
 ### Ranking Engine
 
@@ -100,10 +103,9 @@
 |---|---|---|
 | **No real NIN/BVN verification** | `nin_verified` / `bvn_verified` flags are still set by simulation, not a live API | Integrate Dojah or Smile Identity for live NIN/BVN lookup |
 | **NBA list sync is CSV-only** | `POST /api/admin/sync/nba-disciplinary` requires manual admin CSV upload | Add a scheduled job to auto-fetch from NBA public portal |
-| **No conflict-of-interest check** | A lawyer could advise both sides of a matter | Check `consultations` table for opposing-party overlap before booking confirmation |
-| **No FIRS VAT receipt** | Legal fees attract 7.5% VAT in Nigeria; no tax receipt on payment release | Add `vat_amount` field to `PaymentResponse`; generate PDF receipt |
+| **No milestone-gated escrow** | Payment release is independent of consultation workflow | Require consultation `status == "completed"` + at least 1 milestone before `released` transition |
 
-> ✅ **Already done** — NGN formatting (`price_display` → `₦XX,XXX`), `bar_chapter` field on lawyer profiles, NBA disciplinary CSV sync endpoint, and engagement letter PDF generation were all previously listed as gaps but are now implemented.
+> ✅ **Already done** — Conflict-of-interest check (`check_conflict`), contingency fee arrangements (`is_contingency` + success fee endpoint), and VAT fields (`vat_amount_ngn`, `total_plus_vat_ngn`) were previously listed as gaps but are now implemented.
 
 ---
 
@@ -183,19 +185,17 @@ The generated PDF is stored in `storage/uploads/` and registered as a consultati
 
 ---
 
-### 4.2 Conflict-of-Interest Engine
+### 4.2 Conflict-of-Interest Engine ✅ IMPLEMENTED
 
-Before a consultation is confirmed, query whether the same lawyer has an open consultation with any party on the opposing side of the same matter type within the same jurisdiction.
+`check_conflict(lawyer_id, opposing_party_name)` in `app/repos/consultations.py` queries `consultations` for prior bookings with the same lawyer and opposing party (case-insensitive). It is called automatically in `POST /api/consultations` whenever `opposing_party_name` is provided. Conflicts are logged as `consultation.conflict_alert` audit events and surfaced to the client in the response.
 
-```python
-# Pseudocode — check in repos/consultations.py before insert
-async def check_conflict(lawyer_id: str, client_user_id: int, matter_category: str) -> bool:
-    # Find all parties the lawyer has open consultations with
-    # Check if client_user_id appears on the opposing side of any matched matter
-    ...
-```
+**Remaining gap**: Conflict detection is name-string-only. A stronger implementation would also match by party NIN or company RC number to catch name variations.
 
-**Implementation effort**: ~1 day. High legal risk mitigation.
+---
+
+### 4.2a Contingency Fee Arrangements ✅ IMPLEMENTED
+
+Consultations can now be created with `is_contingency: true` and a `contingency_percentage` (0–100). When the matter concludes, lawyers call `POST /api/consultations/{id}/success-fee` with `recovered_amount_ngn`; the platform calculates the success fee, creates a payment record, and logs the event. This aligns with the NBA Legal Practitioners Act fee regulations for contingency matters.
 
 ---
 
@@ -242,13 +242,11 @@ Lagos State's Justice Information System (JISC) supports digital court filing. A
 
 ---
 
-### 4.7 FIRS VAT Receipt for Legal Fees
+### 4.7 FIRS VAT Receipt for Legal Fees ✅ IMPLEMENTED
 
-Legal services are subject to 7.5% VAT in Nigeria (FIRS circular 2020). Add:
+`PaymentResponse` now includes `vat_amount_ngn` and `total_plus_vat_ngn` fields. The 7.5% VAT is calculated at payment creation per FIRS circular 2020.
 
-- `vat_amount` and `vat_rate` fields to `PaymentResponse`
-- PDF tax receipt generation on payment release
-- Compliance with FIRS e-invoice requirements for legal practitioners
+**Remaining gap**: A PDF tax receipt (FIRS e-invoice format) is not yet generated on payment release. This should be added to the payment release flow in `repos/payments.py` using the same `fpdf2` stack as the engagement letter.
 
 ---
 
@@ -278,6 +276,9 @@ This matches how Nigerian legal escrow works in practice and protects both parti
   - NBA disciplinary CSV sync endpoint
   - Privacy policy + cookie consent endpoints
   - Production config validation on startup
+  - Conflict-of-interest check (check_conflict on booking)
+  - Contingency fee arrangements (is_contingency + success fee endpoint)
+  - VAT fields on PaymentResponse (vat_amount_ngn, total_plus_vat_ngn)
 
 Phase 3 (Weeks 1–2) — Hardening
   ├── Email/SMS (SendGrid + Twilio + Celery/Redis)
@@ -288,14 +289,14 @@ Phase 3 (Weeks 1–2) — Hardening
 Phase 4 (Weeks 3–4) — Engagement & Real-time
   ├── WebSocket real-time chat (/ws/conversations/{id})
   ├── NDPA data processing inventory endpoint
-  ├── Conflict-of-interest check on consultation booking
+  ├── FIRS VAT PDF receipt on payment release
   └── Engagement letter: add enrollment_number + bar_chapter to PDF
 
 Phase 5 (Weeks 5–6) — Trust & Verification
   ├── Real NIN/BVN via Dojah API (highest-priority trust gap)
   ├── Scheduled NBA disciplinary list sync (replace manual CSV)
-  ├── FIRS VAT receipt on payment release
   ├── Milestone-gated escrow release
+  ├── Conflict detection by NIN/RC number (not just name string)
   └── Load testing (Locust/K6) + connection pooling
 
 Phase 6 (Weeks 7–8) — Differentiation
@@ -314,14 +315,14 @@ Phase 6 (Weeks 7–8) — Differentiation
 | ---------------------- | ------- | ------------------------------------ |
 | Technical Architecture | 4.5 / 5 | ✅ Excellent for MVP                 |
 | NDPA Compliance        | 4 / 5   | ✅ Phase 1 complete; Phase 2 pending |
-| Nigerian Market Fit    | 4 / 5   | ✅ Core requirements met             |
+| Nigerian Market Fit    | 4.5 / 5 | ✅ Strong; conflict-of-interest, contingency fees, VAT implemented |
 | User Experience        | 3.5 / 5 | ⚠️ Needs real-time upgrades          |
 | PCI-DSS (Payments)     | 5 / 5   | ✅ 100% via Paystack                 |
 | ISO 27001 (Security)   | 3.5 / 5 | ⚠️ Encryption + backup gaps          |
 
 **Verdict**: ✅ **Pilot-ready for 1–3 real lawyers.**  
-The critical blocker before scaling to real users is **email/SMS notifications** (SendGrid + Twilio). NIN/BVN encryption is already in place. Real NIN/BVN verification (Dojah) is the next trust-layer priority.
+The critical blocker before scaling to real users is **email/SMS notifications** (SendGrid + Twilio). NIN/BVN encryption is in place. Real NIN/BVN verification via Dojah is the next trust-layer priority.
 
 ---
 
-*Last updated: April 21, 2026 (re-verified) | Test suite: 53 passed, 0 warnings*
+*Last updated: April 21, 2026 (re-verified ×2) | Test suite: 53 passed, 0 warnings*

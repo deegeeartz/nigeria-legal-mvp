@@ -18,6 +18,8 @@ async def create_consultation(
     scheduled_for: str, 
     summary: str, 
     opposing_party_name: str | None = None,
+    opposing_party_nin: str | None = None,
+    opposing_party_rc_number: str | None = None,
     is_contingency: bool = False,
     contingency_percentage: float | None = None
 ) -> dict[str, Any]:
@@ -29,10 +31,11 @@ async def create_consultation(
             """
             INSERT INTO consultations (
                 client_user_id, lawyer_id, scheduled_for, summary, status, created_on, 
-                opposing_party_name, is_contingency, contingency_percentage
-            ) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?)
+                opposing_party_name, opposing_party_nin, opposing_party_rc_number,
+                is_contingency, contingency_percentage
+            ) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)
             """,
-            (client_user_id, lawyer_id, scheduled_dt, summary, now, opposing_party_name, _db_bool(is_contingency), contingency_percentage),
+            (client_user_id, lawyer_id, scheduled_dt, summary, now, opposing_party_name, opposing_party_nin, opposing_party_rc_number, _db_bool(is_contingency), contingency_percentage),
         )
         await conn.commit()
         cons_id = res.lastrowid
@@ -163,18 +166,55 @@ async def list_consultation_notes(consultation_id: int, user_id: int | None = No
     # We'll just return all and assume the router/DB previous logic was similar or we handle it there.
     return notes
 
-async def check_conflict(lawyer_id: str, opposing_party_name: str) -> list[dict[str, Any]]:
+async def check_conflict(
+    lawyer_id: str,
+    opposing_party_name: str | None = None,
+    opposing_party_nin: str | None = None,
+    opposing_party_rc_number: str | None = None,
+) -> list[dict[str, Any]]:
     """Check for past consultations with the same opposing party for this lawyer.
-    
-    This is used to flag potential conflicts of interest as required by NBA rules.
+
+    Matches on any of: name (fuzzy), NIN (exact), or CAC RC number (exact).
+    NIN and RC number matches are definitive — they bypass name-only ambiguity.
+    Used to flag potential conflicts of interest as required by NBA RPC.
     """
-    if not opposing_party_name:
+    if not opposing_party_name and not opposing_party_nin and not opposing_party_rc_number:
         return []
-        
+
+    results: list[dict] = []
     async with connect() as conn:
-        res = await conn.execute(
-            "SELECT * FROM consultations WHERE lawyer_id = ? AND LOWER(opposing_party_name) = LOWER(?) ORDER BY created_on DESC",
-            (lawyer_id, opposing_party_name),
-        )
-        rows = res.fetchall()
-    return [dict(row) for row in rows]
+        # 1. Name match (case-insensitive) — lowest confidence
+        if opposing_party_name:
+            res = await conn.execute(
+                "SELECT * FROM consultations WHERE lawyer_id = ? AND LOWER(opposing_party_name) = LOWER(?) ORDER BY created_on DESC",
+                (lawyer_id, opposing_party_name),
+            )
+            rows = res.fetchall()
+            results.extend([{**dict(r), "conflict_match_type": "name"} for r in rows])
+
+        # 2. NIN match (exact) — high confidence
+        if opposing_party_nin:
+            res = await conn.execute(
+                "SELECT * FROM consultations WHERE lawyer_id = ? AND opposing_party_nin = ? ORDER BY created_on DESC",
+                (lawyer_id, opposing_party_nin),
+            )
+            rows = res.fetchall()
+            results.extend([{**dict(r), "conflict_match_type": "nin"} for r in rows])
+
+        # 3. RC number match (exact) — high confidence
+        if opposing_party_rc_number:
+            res = await conn.execute(
+                "SELECT * FROM consultations WHERE lawyer_id = ? AND opposing_party_rc_number = ? ORDER BY created_on DESC",
+                (lawyer_id, opposing_party_rc_number),
+            )
+            rows = res.fetchall()
+            results.extend([{**dict(r), "conflict_match_type": "rc_number"} for r in rows])
+
+    # Deduplicate by consultation id, preferring higher-confidence match types
+    seen: dict[int, dict] = {}
+    priority = {"nin": 0, "rc_number": 1, "name": 2}
+    for r in results:
+        cid = r["id"]
+        if cid not in seen or priority[r["conflict_match_type"]] < priority[seen[cid]["conflict_match_type"]]:
+            seen[cid] = r
+    return list(seen.values())

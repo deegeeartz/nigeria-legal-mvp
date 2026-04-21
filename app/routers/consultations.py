@@ -29,9 +29,13 @@ from app.db import (
 )
 from app.models import (
     ConsultationCreateRequest,
+    ConsultationResponse,
     ConsultationStatusUpdateRequest,
     ConsultationNoteCreateRequest,
     ConsultationNoteResponse,
+    DocumentResponse,
+    MilestoneCreateRequest,
+    MilestoneResponse,
     SuccessFeeRequest,
     PaymentResponse,
 )
@@ -63,6 +67,8 @@ async def list_consultations_endpoint(
             status=item["status"],
             created_on=item["created_on"],
             opposing_party_name=item.get("opposing_party_name"),
+            opposing_party_nin=item.get("opposing_party_nin"),
+            opposing_party_rc_number=item.get("opposing_party_rc_number"),
             is_contingency=item.get("is_contingency", False),
             contingency_percentage=item.get("contingency_percentage"),
         )
@@ -82,22 +88,31 @@ async def book_consultation(
         payload.scheduled_for, 
         payload.summary,
         opposing_party_name=payload.opposing_party_name,
+        opposing_party_nin=payload.opposing_party_nin,
+        opposing_party_rc_number=payload.opposing_party_rc_number,
         is_contingency=payload.is_contingency,
         contingency_percentage=payload.contingency_percentage
     )
     if consultation is None:
         raise HTTPException(status_code=404, detail="Lawyer not found")
     
-    # Conflict of Interest Check
-    if payload.opposing_party_name:
-        conflicts = await check_conflict(payload.lawyer_id, payload.opposing_party_name)
+    # Conflict of Interest Check (name + NIN + RC number)
+    if payload.opposing_party_name or payload.opposing_party_nin or payload.opposing_party_rc_number:
+        conflicts = await check_conflict(
+            payload.lawyer_id,
+            opposing_party_name=payload.opposing_party_name,
+            opposing_party_nin=payload.opposing_party_nin,
+            opposing_party_rc_number=payload.opposing_party_rc_number,
+        )
         if conflicts:
+            match_types = list({c["conflict_match_type"] for c in conflicts})
             await log_event(
                 user["id"], 
                 "consultation.conflict_alert", 
                 "consultation", 
                 str(consultation["id"]), 
-                f"POTENTIAL CONFLICT: Lawyer has {len(conflicts)} past consultation(s) involving opposing party '{payload.opposing_party_name}'"
+                f"POTENTIAL CONFLICT: Lawyer has {len(conflicts)} past consultation(s) involving opposing party "
+                f"(matched by: {', '.join(match_types)})"
             )
 
     await log_event(user["id"], "consultation.booked", "consultation", str(consultation["id"]), "Consultation booked")
@@ -127,6 +142,10 @@ async def book_consultation(
         status=consultation["status"],
         created_on=consultation["created_on"],
         opposing_party_name=consultation.get("opposing_party_name"),
+        opposing_party_nin=consultation.get("opposing_party_nin"),
+        opposing_party_rc_number=consultation.get("opposing_party_rc_number"),
+        is_contingency=consultation.get("is_contingency", False),
+        contingency_percentage=consultation.get("contingency_percentage"),
     )
 
 
@@ -150,6 +169,10 @@ async def get_consultation_endpoint(
         status=consultation["status"],
         created_on=consultation["created_on"],
         opposing_party_name=consultation.get("opposing_party_name"),
+        opposing_party_nin=consultation.get("opposing_party_nin"),
+        opposing_party_rc_number=consultation.get("opposing_party_rc_number"),
+        is_contingency=consultation.get("is_contingency", False),
+        contingency_percentage=consultation.get("contingency_percentage"),
     )
 
 
@@ -201,6 +224,8 @@ async def update_consultation_status_endpoint(
         status=updated["status"],
         created_on=updated["created_on"],
         opposing_party_name=updated.get("opposing_party_name"),
+        opposing_party_nin=updated.get("opposing_party_nin"),
+        opposing_party_rc_number=updated.get("opposing_party_rc_number"),
         is_contingency=updated.get("is_contingency", False),
         contingency_percentage=updated.get("contingency_percentage"),
     )

@@ -82,6 +82,7 @@ from app.repos.consultations import (  # noqa: F401
     list_milestones,
     create_consultation_note,
     list_consultation_notes,
+    check_conflict,
 )
 from app.repos.payments import (  # noqa: F401
     create_payment,

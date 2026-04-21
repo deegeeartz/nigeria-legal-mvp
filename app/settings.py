@@ -50,7 +50,14 @@ _CORS_DEFAULT = "http://localhost:3000,http://127.0.0.1:3000"
 CORS_ALLOWED_ORIGINS = [o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", _CORS_DEFAULT).split(",")]
 
 # PII Encryption Key (32-byte Fernet key)
-_PII_FALLBACK_KEY = "k6zY2_D1Z9hXm-K8N5-U9zU2_D1Z9hXm-K8N5-U9zU=" 
+# Fallback is derived deterministically from a fixed seed for dev/test.
+# In production, set PII_SECRET_KEY to a unique value generated with:
+#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+import hashlib as _hashlib
+import base64 as _base64
+_PII_FALLBACK_KEY = _base64.urlsafe_b64encode(
+    _hashlib.sha256(b"nigeria-legal-mvp-dev-pii-fallback-key-do-not-use-in-prod").digest()
+).decode()
 PII_SECRET_KEY = os.getenv("PII_SECRET_KEY", _PII_FALLBACK_KEY)
 
 # Seal Security
@@ -89,7 +96,7 @@ def validate_runtime_configuration() -> None:
     
     if ENVIRONMENT == "production":
         if PII_SECRET_KEY == _PII_FALLBACK_KEY:
-            errors.append("PII_SECRET_KEY must be a unique secure key in production")
+            errors.append("PII_SECRET_KEY must be a unique secure key in production (not the dev fallback)")
         
         for key in REQUIRED_SENSITIVE_KEYS:
             val = os.getenv(key)

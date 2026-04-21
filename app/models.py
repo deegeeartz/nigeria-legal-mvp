@@ -298,6 +298,8 @@ class ConsultationCreateRequest(BaseModel):
     scheduled_for: str = Field(min_length=10, max_length=80)
     summary: str = Field(min_length=10, max_length=2000)
     opposing_party_name: Optional[str] = Field(default=None, max_length=100)
+    opposing_party_nin: Optional[str] = Field(default=None, max_length=11, description="NIN of opposing party for stronger conflict detection")
+    opposing_party_rc_number: Optional[str] = Field(default=None, max_length=20, description="CAC RC number if opposing party is a company")
     is_contingency: bool = False
     contingency_percentage: Optional[float] = Field(default=None, ge=0, le=100)
 
@@ -320,6 +322,8 @@ class ConsultationResponse(BaseModel):
     status: ConsultationStatus
     created_on: datetime
     opposing_party_name: Optional[str] = None
+    opposing_party_nin: Optional[str] = None
+    opposing_party_rc_number: Optional[str] = None
     is_contingency: bool = False
     contingency_percentage: Optional[float] = None
 

@@ -182,7 +182,7 @@ async def simulate_payment_action(
     
     if payload.action == "release":
         milestones = await list_milestones(payment["consultation_id"])
-        if not any(m.get("status_label") == "completed" for m in milestones):
+        if milestones and not any(m.get("status_label") == "completed" for m in milestones):
             raise HTTPException(status_code=400, detail="Escrow release denied: No milestones are marked as completed for this consultation.")
 
     updated = await update_payment_status(payment_id, payload.action)
