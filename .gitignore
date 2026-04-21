@@ -2,6 +2,12 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
-legal_mvp.db
+.env
+.env.*
+*.db
+*.sqlite
 storage/uploads/*
 !storage/uploads/.gitkeep
+.vscode/
+.idea/
+*.log

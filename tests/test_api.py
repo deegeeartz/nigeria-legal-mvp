@@ -1,26 +1,18 @@
-from fastapi.testclient import TestClient
 import pytest
 
-from app.db import reset_db_for_tests
-from app.main import app
+# reset_db is now handled in conftest.py as autouse async fixture
 
 
-client = TestClient(app)
-
-
-@pytest.fixture(autouse=True)
-def reset_db() -> None:
-    reset_db_for_tests()
-
-
-def test_health() -> None:
-    response = client.get("/health")
+@pytest.mark.asyncio
+async def test_health(client) -> None:
+    response = await client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
 
 
-def test_intake_match() -> None:
-    response = client.post(
+@pytest.mark.asyncio
+async def test_intake_match(client) -> None:
+    response = await client.post(
         "/api/intake/match",
         json={
             "summary": "My employer terminated me without notice in Lagos.",
@@ -37,20 +29,23 @@ def test_intake_match() -> None:
     assert "Ranking reflects platform performance" in body["disclaimer"]
 
 
-def test_get_lawyer_profile() -> None:
-    response = client.get("/api/lawyers/lw_001")
+@pytest.mark.asyncio
+async def test_get_lawyer_profile(client) -> None:
+    response = await client.get("/api/lawyers/lw_001")
     assert response.status_code == 200
     body = response.json()
     assert body["verification"]["nin_verified"] is True
 
 
-def test_lawyer_not_found() -> None:
-    response = client.get("/api/lawyers/missing")
+@pytest.mark.asyncio
+async def test_lawyer_not_found(client) -> None:
+    response = await client.get("/api/lawyers/missing")
     assert response.status_code == 404
 
 
-def test_file_and_resolve_complaint_flow() -> None:
-    filed_by = client.post(
+@pytest.mark.asyncio
+async def test_file_and_resolve_complaint_flow(client) -> None:
+    filed_by = await client.post(
         "/api/auth/signup",
         json={
             "email": "complaint.client@example.com",
@@ -62,14 +57,14 @@ def test_file_and_resolve_complaint_flow() -> None:
     assert filed_by.status_code == 200
     client_token = filed_by.json()["access_token"]
 
-    admin_login = client.post(
+    admin_login = await client.post(
         "/api/auth/login",
         json={"email": "admin@legalmvp.local", "password": "AdminPass123!"},
     )
     assert admin_login.status_code == 200
     admin_token = admin_login.json()["access_token"]
 
-    file_response = client.post(
+    file_response = await client.post(
         "/api/complaints",
         headers={"X-Auth-Token": client_token},
         json={
@@ -83,12 +78,12 @@ def test_file_and_resolve_complaint_flow() -> None:
     assert filed["status"] == "open"
     assert filed["severity"] == "severe"
 
-    list_response = client.get("/api/complaints/lw_001", headers={"X-Auth-Token": client_token})
+    list_response = await client.get("/api/complaints/lw_001", headers={"X-Auth-Token": client_token})
     assert list_response.status_code == 200
     complaints = list_response.json()
     assert complaints
 
-    resolve_response = client.post(
+    resolve_response = await client.post(
         f"/api/complaints/{filed['complaint_id']}/resolve",
         headers={"X-Auth-Token": admin_token},
         json={"action": "uphold", "resolution_note": "Reviewed and closed after enforcement."},

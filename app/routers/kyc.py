@@ -41,7 +41,7 @@ async def submit_kyc(
     nin: Optional[str] = Form(default=None),
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> KycStatusResponse:
-    user = require_user(x_auth_token)
+    user = await require_user(x_auth_token)
     if user["role"] != "lawyer":
         raise HTTPException(status_code=403, detail="Lawyer role required")
     
@@ -49,7 +49,7 @@ async def submit_kyc(
     if not lawyer_id:
         raise HTTPException(status_code=400, detail="User is not linked to a lawyer profile")
         
-    lawyer = get_lawyer(lawyer_id)
+    lawyer = await get_lawyer(lawyer_id)
     if not lawyer:
         raise HTTPException(status_code=404, detail="Lawyer profile not found")
 
@@ -70,7 +70,7 @@ async def submit_kyc(
     except MalwareScanError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
         
-    uploaded = create_kyc_document(
+    uploaded = await create_kyc_document(
         lawyer_id=lawyer_id,
         uploaded_by_user_id=user["id"],
         original_filename=certificate_file.filename or "certificate",
@@ -84,17 +84,25 @@ async def submit_kyc(
     
     if nin:
         lawyer.nin = nin
-        lawyer.nin_verified = _simulate_nin_verification(nin, lawyer.full_name)
 
-    save_lawyer(lawyer)
+    # Ensure a KYC event is logged so status lookups succeed
+    await upsert_kyc_status(
+        lawyer_id=lawyer_id,
+        nin_verified=None, # Keep existing NIN status from submit logic if any
+        nba_verified=False, # Reset/Pending until reviewed
+        bvn_verified=None, # Keep existing
+        note=f"KYC document submitted: {uploaded['original_filename']} (Enrollment: {enrollment_number})"
+    )
+
+    await save_lawyer(lawyer)
     
-    updated = get_latest_kyc_status(lawyer_id)
+    updated = await get_latest_kyc_status(lawyer_id)
     if updated is None:
         raise HTTPException(status_code=404, detail="Status not found")
 
-    log_event(user["id"], "kyc.submitted", "lawyer", lawyer_id, "Lawyer submitted KYC and Call to Bar certificate for admin review")
-    notify_users(
-        get_lawyer_user_ids(lawyer_id),
+    await log_event(user["id"], "kyc.submitted", "lawyer", lawyer_id, "Lawyer submitted KYC and Call to Bar certificate for admin review")
+    await notify_users(
+        await get_lawyer_user_ids(lawyer_id),
         kind="kyc_updated",
         title="KYC Submission Received",
         body="Your Call to Bar certificate has been received and is pending admin review.",
@@ -106,11 +114,11 @@ async def submit_kyc(
 
 
 @router.post("/nin/verify", response_model=KycStatusResponse)
-def verify_nin(
+async def verify_nin(
     nin: str = Form(...),
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> KycStatusResponse:
-    user = require_user(x_auth_token)
+    user = await require_user(x_auth_token)
     if user["role"] != "lawyer":
         raise HTTPException(status_code=403, detail="Lawyer role required")
 
@@ -118,50 +126,60 @@ def verify_nin(
     if not lawyer_id:
         raise HTTPException(status_code=400, detail="User is not linked to a lawyer profile")
 
-    lawyer = get_lawyer(lawyer_id)
+    lawyer = await get_lawyer(lawyer_id)
     if not lawyer:
         raise HTTPException(status_code=404, detail="Lawyer profile not found")
 
     is_valid = _simulate_nin_verification(nin, lawyer.full_name)
+    
+    # Use upsert_kyc_status to ensure a KYC event is logged
+    await upsert_kyc_status(
+        lawyer_id=lawyer_id,
+        nin_verified=is_valid,
+        nba_verified=None, # Keep existing
+        bvn_verified=None, # Keep existing
+        note=f"NIN verification attempt: {nin} (Result: {is_valid})"
+    )
+    
+    # Also update the NIN field specifically on the lawyer profile
     lawyer.nin = nin
-    lawyer.nin_verified = is_valid
-    save_lawyer(lawyer)
+    await save_lawyer(lawyer)
 
-    log_event(user["id"], "kyc.nin_verified", "lawyer", lawyer_id, f"NIN verification result: {is_valid}")
+    await log_event(user["id"], "kyc.nin_verified", "lawyer", lawyer_id, f"NIN verification result: {is_valid}")
 
-    updated = get_latest_kyc_status(lawyer_id)
+    updated = await get_latest_kyc_status(lawyer_id)
     if updated is None:
-        raise HTTPException(status_code=404, detail="Status not found")
+        raise HTTPException(status_code=404, detail="Status not found after update")
     return KycStatusResponse(**updated)
 
 
 @router.get("/pending")
-def list_pending_kyc(
+async def list_pending_kyc(
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> list[dict]:
-    require_admin(x_auth_token)
-    return list_pending_kyc_submissions()
+    await require_admin(x_auth_token)
+    return await list_pending_kyc_submissions()
 
 
 @router.post("/verify", response_model=KycStatusResponse)
-def verify_kyc(
+async def verify_kyc(
     payload: KycVerifyRequest,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> KycStatusResponse:
-    admin_user = require_admin(x_auth_token)
-    updated = upsert_kyc_status(
+    admin_user = await require_admin(x_auth_token)
+    updated = await upsert_kyc_status(
         payload.lawyer_id,
         payload.nin_verified,
         payload.nba_verified,
         payload.bvn_verified,
         payload.note,
     )
-    if updated is None:
+    if updated is None or "error" in updated:
         raise HTTPException(status_code=404, detail="Lawyer not found")
 
-    log_event(admin_user["id"], "kyc.updated", "lawyer", payload.lawyer_id, "Lawyer KYC verification updated")
-    notify_users(
-        get_lawyer_user_ids(payload.lawyer_id),
+    await log_event(admin_user["id"], "kyc.updated", "lawyer", payload.lawyer_id, "Lawyer KYC verification updated")
+    await notify_users(
+        await get_lawyer_user_ids(payload.lawyer_id),
         kind="kyc_updated",
         title="KYC profile updated",
         body=f"Verification status for lawyer {payload.lawyer_id} was updated.",
@@ -173,35 +191,32 @@ def verify_kyc(
 
 
 @router.get("/{lawyer_id}", response_model=KycStatusResponse)
-def get_kyc(lawyer_id: str, x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token")) -> KycStatusResponse:
-    require_user(x_auth_token)
-    status = get_latest_kyc_status(lawyer_id)
+async def get_kyc(lawyer_id: str, x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token")) -> KycStatusResponse:
+    await require_user(x_auth_token)
+    status = await get_latest_kyc_status(lawyer_id)
     if status is None:
         raise HTTPException(status_code=404, detail="Lawyer not found")
     return KycStatusResponse(**status)
 
 
 @router.get("/{lawyer_id}/certificate/download")
-def download_kyc_certificate(
+async def download_kyc_certificate(
     lawyer_id: str,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> FileResponse:
-    user = require_user(x_auth_token)
+    user = await require_user(x_auth_token)
     if user["role"] != "admin" and not (user["role"] == "lawyer" and user.get("lawyer_id") == lawyer_id):
         raise HTTPException(status_code=403, detail="KYC certificate access denied")
 
-    lawyer = get_lawyer(lawyer_id)
+    lawyer = await get_lawyer(lawyer_id)
     if lawyer is None or lawyer.verification_document_id is None:
         raise HTTPException(status_code=404, detail="KYC certificate not found")
 
-    document = get_kyc_document(lawyer.verification_document_id)
+    document = await get_kyc_document(lawyer.verification_document_id)
     if document is None:
         raise HTTPException(status_code=404, detail="KYC certificate not found")
 
     file_path = get_kyc_document_file_path(document)
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Stored KYC certificate not found")
-
     return FileResponse(
         path=file_path,
         media_type=document["content_type"],

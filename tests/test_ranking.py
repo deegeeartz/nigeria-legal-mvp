@@ -6,6 +6,7 @@ from app.ranking import (
     is_eligible_for_new_rotation,
     rank_lawyers,
 )
+import asyncio
 
 
 def test_exposure_band_thresholds() -> None:
@@ -32,7 +33,7 @@ def test_rank_lawyers_returns_matches_and_disclaimer_context() -> None:
         urgency=Urgency.this_week,
         budget_max_ngn=50000,
     )
-    category, band, matches = rank_lawyers(payload, SEED_LAWYERS, top_n=5)
+    category, band, matches = asyncio.run(rank_lawyers(payload, SEED_LAWYERS, top_n=5))
 
     assert category == "property"
     assert band in {10, 15, 20, 25}

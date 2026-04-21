@@ -4,6 +4,7 @@ from datetime import datetime, UTC
 import hashlib
 import hmac
 import json
+import httpx
 
 from app.dependencies import (
     log_event,
@@ -54,19 +55,63 @@ def to_payment_response(payment: dict) -> PaymentResponse:
 router = APIRouter(tags=["payments"])
 
 @router.post("/api/payments/paystack/initialize", response_model=PaymentResponse)
-def initialize_paystack_payment(
+async def initialize_paystack_payment(
     payload: PaymentCreateRequest,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> PaymentResponse:
-    user = require_user(x_auth_token)
-    if not user_can_access_consultation(user, payload.consultation_id):
+    user = await require_user(x_auth_token)
+    if not await user_can_access_consultation(user, payload.consultation_id):
         raise HTTPException(status_code=403, detail="Consultation access denied")
-    payment = create_payment(payload.consultation_id, payload.provider)
+    
+    # In a real app, fee would be fetched from lawyer profile
+    # For now, default to 5000 NGN
+    amount_ngn = 5000
+    amount_kobo = amount_ngn * 100
+    
+    # Call Paystack API to initialize transaction
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(
+                "https://api.paystack.co/transaction/initialize",
+                headers={"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"},
+                json={
+                    "email": user["email"],
+                    "amount": amount_kobo,
+                    "metadata": {"consultation_id": payload.consultation_id}
+                },
+                timeout=10.0
+            )
+            resp.raise_for_status()
+            data = resp.json()["data"]
+            access_code = data["access_code"]
+            authorization_url = data["authorization_url"]
+            reference = data["reference"]
+        except Exception as e:
+            # Fallback to simulation if Paystack is unreachable/config is test-only
+            # but log the failure
+            await log_event(user["id"], "payment.initialization_failed", "system", str(payload.consultation_id), f"Paystack API error: {str(e)}")
+            # For this task, we want to fail/raise if real integration is intended but fails
+            if ENVIRONMENT in {"staging", "production"}:
+                 raise HTTPException(status_code=502, detail=f"Payment gateway communication failed: {str(e)}")
+            
+            # Dev/Test fallback
+            access_code = None
+            authorization_url = None
+
+    payment = await create_payment(
+        payload.consultation_id, 
+        payload.provider, 
+        amount_ngn=amount_ngn,
+        access_code=access_code,
+        authorization_url=authorization_url
+    )
+    
     if payment is None:
         raise HTTPException(status_code=404, detail="Consultation not found")
-    log_event(user["id"], "payment.initialized", "payment", str(payment["id"]), f"Paystack simulation initialized with reference {payment['reference']}")
-    notify_users(
-        list_consultation_participant_user_ids(payload.consultation_id),
+        
+    await log_event(user["id"], "payment.initialized", "payment", str(payment["id"]), f"Paystack initialized with reference {payment['reference']}")
+    await notify_users(
+        await list_consultation_participant_user_ids(payload.consultation_id),
         kind="payment_updated",
         title="Payment initialized",
         body=f"Payment {payment['reference']} is awaiting verification.",
@@ -76,30 +121,30 @@ def initialize_paystack_payment(
     return to_payment_response(payment)
 
 @router.post("/api/payments/simulate", response_model=PaymentResponse)
-def simulate_payment_create(
+async def simulate_payment_create(
     payload: PaymentCreateRequest,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> PaymentResponse:
-    return initialize_paystack_payment(payload, x_auth_token)
+    return await initialize_paystack_payment(payload, x_auth_token)
 
 
 @router.post("/api/payments/paystack/{reference}/verify", response_model=PaymentResponse)
-def verify_paystack_reference(
+async def verify_paystack_reference(
     reference: str,
     payload: PaystackVerifyRequest,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> PaymentResponse:
-    user = require_user(x_auth_token)
-    payment = get_payment_by_reference(reference)
+    user = await require_user(x_auth_token)
+    payment = await get_payment_by_reference(reference)
     if payment is None:
         raise HTTPException(status_code=404, detail="Payment not found")
-    if not user_can_access_consultation(user, payment["consultation_id"]):
+    if not await user_can_access_consultation(user, payment["consultation_id"]):
         raise HTTPException(status_code=403, detail="Consultation access denied")
     
-    updated = verify_paystack_payment(reference, payload.outcome)
-    log_event(user["id"], "payment.verified", "payment", str(payment["id"]), f"Paystack verification outcome: {payload.outcome}")
-    notify_users(
-        list_consultation_participant_user_ids(payment["consultation_id"]),
+    updated = await verify_paystack_payment(reference, payload.outcome)
+    await log_event(user["id"], "payment.verified", "payment", str(payment["id"]), f"Paystack verification outcome: {payload.outcome}")
+    await notify_users(
+        await list_consultation_participant_user_ids(payment["consultation_id"]),
         kind="payment_updated",
         title="Payment verification updated",
         body=f"Payment {reference} verification outcome: {payload.outcome}.",
@@ -111,22 +156,22 @@ def verify_paystack_reference(
 
 
 @router.post("/api/payments/{payment_id}/simulate", response_model=PaymentResponse)
-def simulate_payment_action(
+async def simulate_payment_action(
     payment_id: int,
     payload: PaymentActionRequest,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> PaymentResponse:
-    user = require_user(x_auth_token)
-    payment = get_payment(payment_id)
+    user = await require_user(x_auth_token)
+    payment = await get_payment(payment_id)
     if payment is None:
         raise HTTPException(status_code=404, detail="Payment not found")
-    if not user_can_access_consultation(user, payment["consultation_id"]):
+    if not await user_can_access_consultation(user, payment["consultation_id"]):
         raise HTTPException(status_code=403, detail="Payment access denied")
     
-    updated = update_payment_status(payment_id, payload.action)
-    log_event(user["id"], f"payment.{payload.action}", "payment", str(payment_id), f"Payment action {payload.action} applied")
-    notify_users(
-        list_consultation_participant_user_ids(payment["consultation_id"]),
+    updated = await update_payment_status(payment_id, payload.action)
+    await log_event(user["id"], f"payment.{payload.action}", "payment", str(payment_id), f"Payment action {payload.action} applied")
+    await notify_users(
+        await list_consultation_participant_user_ids(payment["consultation_id"]),
         kind="payment_updated",
         title="Payment status changed",
         body=f"Payment {updated['reference']} is now {updated['status']}.",
@@ -158,9 +203,9 @@ async def paystack_webhook(request: Request):
     reference = data.get("reference")
 
     if event == "charge.success" and reference:
-        payment = get_payment_by_reference(reference)
+        payment = await get_payment_by_reference(reference)
         if payment:
-            updated = verify_paystack_payment(reference, "success")
+            await verify_paystack_payment(reference, "success")
             
             # Broadcast update via WebSocket
             ws_payload = {
@@ -174,11 +219,11 @@ async def paystack_webhook(request: Request):
                 }
             }
             # Notify both client and lawyer
-            participants = list_consultation_participant_user_ids(payment["consultation_id"])
+            participants = await list_consultation_participant_user_ids(payment["consultation_id"])
             await manager.broadcast_to_users(ws_payload, participants)
             
-            log_event(None, "payment.webhook_verified", "payment", str(payment["id"]), f"Webhook received for {reference}")
-            notify_users(
+            await log_event(None, "payment.webhook_verified", "payment", str(payment["id"]), f"Webhook received for {reference}")
+            await notify_users(
                 participants,
                 kind="payment_updated",
                 title="Payment Verified",

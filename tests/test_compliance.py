@@ -1,3 +1,4 @@
+import asyncio
 from fastapi.testclient import TestClient
 import pytest
 
@@ -10,7 +11,7 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def reset_db() -> None:
-    reset_db_for_tests()
+    asyncio.run(reset_db_for_tests())
 
 
 def _signup_client() -> dict:
@@ -266,13 +267,13 @@ def test_breach_registry_admin_only_and_lifecycle() -> None:
 
 def test_breach_sla_tracking() -> None:
     """Test that breach SLA deadlines are calculated and status tracked correctly."""
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     
     admin_auth = _login_admin()
     client_auth = _signup_client()
     
     # Create a breach incident with detection timestamp
-    detected_now = datetime.utcnow().isoformat()
+    detected_now = datetime.now(timezone.utc).isoformat()
     response = client.post(
         "/api/compliance/breach-incidents",
         headers={"X-Auth-Token": admin_auth["access_token"]},
@@ -306,13 +307,13 @@ def test_breach_sla_tracking() -> None:
 
 def test_breach_escalation_admin_only() -> None:
     """Test that breach SLA escalation is admin-only and triggers correctly."""
-    from datetime import datetime
+    from datetime import datetime, timezone
     
     admin_auth = _login_admin()
     client_auth = _signup_client()
     
     # Create a breach incident
-    detected_now = datetime.utcnow().isoformat()
+    detected_now = datetime.now(timezone.utc).isoformat()
     response = client.post(
         "/api/compliance/breach-incidents",
         headers={"X-Auth-Token": admin_auth["access_token"]},
@@ -357,12 +358,12 @@ def test_breach_escalation_admin_only() -> None:
 
 def test_breach_sla_filter_by_status() -> None:
     """Test filtering breaches by SLA status (on-track, at-risk, overdue, notified)."""
-    from datetime import datetime
+    from datetime import datetime, timezone
     
     admin_auth = _login_admin()
     
     # Create breach that will be reported (notified status)
-    detected_now = datetime.utcnow().isoformat()
+    detected_now = datetime.now(timezone.utc).isoformat()
     response1 = client.post(
         "/api/compliance/breach-incidents",
         headers={"X-Auth-Token": admin_auth["access_token"]},

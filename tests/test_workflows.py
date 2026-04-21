@@ -1,3 +1,4 @@
+import asyncio
 import pytest
 from fastapi.testclient import TestClient
 
@@ -10,8 +11,8 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def reset_db() -> None:
-    reset_db_for_tests()
-    create_user("lawyer.user@example.com", "SecurePass123!", "Sadiq Bello", "lawyer", "lw_004")
+    asyncio.run(reset_db_for_tests())
+    asyncio.run(create_user("lawyer.user@example.com", "SecurePass123!", "Sadiq Bello", "lawyer", "lw_004"))
 
 
 def _signup_client() -> dict:

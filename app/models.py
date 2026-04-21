@@ -1,9 +1,9 @@
 from __future__ import annotations
-
+from datetime import datetime
 from dataclasses import dataclass
 from enum import Enum
 import re
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -29,6 +29,23 @@ class ComplaintCategory(str, Enum):
     fraud = "fraud"
 
 
+class CourtType(str, Enum):
+    federal_high_court = "federal_high_court"
+    state_high_court = "state_high_court"
+    magistrate = "magistrate"
+    customary = "customary"
+    sharia = "sharia"
+    national_industrial = "national_industrial"
+    court_of_appeal = "court_of_appeal"
+    supreme_court = "supreme_court"
+
+
+class LegalSystem(str, Enum):
+    common_law = "common_law"
+    sharia = "sharia"
+    customary = "customary"
+
+
 @dataclass
 class Lawyer:
     id: str
@@ -38,7 +55,6 @@ class Lawyer:
     years_called: int
     nin_verified: bool
     nba_verified: bool
-    bvn_verified: bool
     profile_completeness: int
     completed_matters: int
     rating: float
@@ -47,14 +63,25 @@ class Lawyer:
     repeat_client_rate: int
     base_consult_fee_ngn: int
     active_complaints: int
+    bvn_verified: bool = False
     severe_flag: bool = False
     enrollment_number: str | None = None
     verification_document_id: int | None = None
     kyc_submission_status: str = "none"  # none | pending | approved | rejected
     nin: str | None = None
     latest_seal_year: int | None = None
-    latest_seal_expires_at: str | None = None
+    latest_seal_expires_at: datetime | None = None
     seal_badge_visible: bool = False
+    is_san: bool = False
+    court_admissions: List[str] | None = None  # List of CourtType values
+    legal_system: str = "common_law"  # common_law | sharia | customary
+    bvn: str | None = None
+    bar_chapter: str | None = None  # e.g. "Ikeja", "Lagos Island", "Port Harcourt"
+
+    @property
+    def price_display(self) -> str:
+        """Standard Nigerian Naira formatting: ₦XX,XXX"""
+        return f"₦{self.base_consult_fee_ngn:,}"
 
 
 class IntakeRequest(BaseModel):
@@ -63,6 +90,8 @@ class IntakeRequest(BaseModel):
     urgency: Urgency
     budget_max_ngn: int = Field(ge=0)
     legal_terms_mode: bool = False
+    court_type: str | None = Field(default=None, description="Filter by court type (e.g. 'sharia', 'federal_high_court')")
+    legal_system: str | None = Field(default=None, description="Filter by legal system: common_law, sharia, customary")
 
 
 class MatchReason(BaseModel):
@@ -77,6 +106,7 @@ class MatchCard(BaseModel):
     tier: ExpertiseTier
     score: float
     price_ngn: int
+    price_display: str
     why_recommended: List[MatchReason]
     badges: List[str]
 
@@ -93,6 +123,7 @@ class LawyerProfileResponse(BaseModel):
     full_name: str
     tier: ExpertiseTier
     state: str
+    bar_chapter: str | None = None
     practice_areas: List[str]
     verification: dict
     stats: dict
@@ -117,8 +148,8 @@ class ComplaintResponse(BaseModel):
     severity: str
     status: str
     details: str
-    created_on: str
-    resolved_on: str | None = None
+    created_on: datetime
+    resolved_on: datetime | None = None
     resolution_note: str | None = None
 
 
@@ -160,8 +191,8 @@ class AuthResponse(BaseModel):
     lawyer_id: str | None = None
     access_token: str
     refresh_token: str
-    access_expires_at: str
-    refresh_expires_at: str
+    access_expires_at: datetime
+    refresh_expires_at: datetime
 
 
 class RefreshTokenRequest(BaseModel):
@@ -195,7 +226,7 @@ class KycStatusResponse(BaseModel):
     nin_verified: bool
     nba_verified: bool
     bvn_verified: bool
-    updated_on: str
+    updated_on: datetime
     note: str
 
 
@@ -237,7 +268,7 @@ class ConversationResponse(BaseModel):
     client_user_id: int
     lawyer_id: str
     status: ConversationStatus
-    created_on: str
+    created_on: datetime
 
 
 class MessageCreateRequest(BaseModel):
@@ -249,13 +280,14 @@ class MessageResponse(BaseModel):
     conversation_id: int
     sender_user_id: int
     body: str
-    created_on: str
+    created_on: datetime
 
 
 class ConsultationCreateRequest(BaseModel):
     lawyer_id: str = Field(min_length=3, max_length=40)
     scheduled_for: str = Field(min_length=10, max_length=80)
     summary: str = Field(min_length=10, max_length=2000)
+    opposing_party_name: Optional[str] = Field(default=None, max_length=100)
 
 
 class ConsultationStatusUpdateRequest(BaseModel):
@@ -269,7 +301,8 @@ class ConsultationResponse(BaseModel):
     scheduled_for: str
     summary: str
     status: ConsultationStatus
-    created_on: str
+    created_on: datetime
+    opposing_party_name: Optional[str] = None
 
 
 class PaymentCreateRequest(BaseModel):
@@ -288,12 +321,12 @@ class PaymentResponse(BaseModel):
     provider: str
     amount_ngn: int
     status: PaymentStatus
-    created_on: str
+    created_on: datetime
     access_code: str | None = None
     authorization_url: str | None = None
     gateway_status: str | None = None
-    paid_on: str | None = None
-    released_on: str | None = None
+    paid_on: datetime | None = None
+    released_on: datetime | None = None
 
 
 class PaystackVerifyRequest(BaseModel):
@@ -307,7 +340,7 @@ class AuditEventResponse(BaseModel):
     resource_type: str
     resource_id: str | None = None
     detail: str
-    created_on: str
+    created_on: datetime
 
 
 class NotificationResponse(BaseModel):
@@ -319,8 +352,8 @@ class NotificationResponse(BaseModel):
     resource_type: str
     resource_id: str | None = None
     is_read: bool
-    created_on: str
-    read_on: str | None = None
+    created_on: datetime
+    read_on: datetime | None = None
 
 
 class DocumentResponse(BaseModel):
@@ -331,7 +364,7 @@ class DocumentResponse(BaseModel):
     original_filename: str
     content_type: str
     size_bytes: int
-    created_on: str
+    created_on: datetime
 
 class MilestoneCreateRequest(BaseModel):
     event_name: str = Field(min_length=2, max_length=100)
@@ -344,7 +377,7 @@ class MilestoneResponse(BaseModel):
     event_name: str
     status_label: str | None = None
     description: str | None = None
-    created_on: str
+    created_on: datetime
 
 class ConsultationNoteCreateRequest(BaseModel):
     body: str = Field(min_length=1, max_length=2000)
@@ -356,7 +389,7 @@ class ConsultationNoteResponse(BaseModel):
     author_user_id: int
     body: str
     is_private: bool
-    created_on: str
+    created_on: datetime
 
 
 class ConsentEventCreateRequest(BaseModel):
@@ -375,7 +408,7 @@ class ConsentEventResponse(BaseModel):
     consented: bool
     policy_version: str
     metadata_json: str | None = None
-    created_on: str
+    created_on: datetime
 
 
 class DsrRequestCreateRequest(BaseModel):
@@ -394,9 +427,9 @@ class DsrRequestResponse(BaseModel):
     request_type: str
     status: str
     detail: str
-    created_on: str
-    updated_on: str
-    resolved_on: str | None = None
+    created_on: datetime
+    updated_on: datetime
+    resolved_on: datetime | None = None
     resolution_note: str | None = None
     resolved_by_user_id: int | None = None
 
@@ -414,7 +447,7 @@ class DsrDeletionExecuteResponse(BaseModel):
     redacted_notes: int
     deleted_notifications: int
     revoked_sessions: int
-    executed_on: str
+    executed_on: datetime
 
 
 class DsrExportResponse(BaseModel):
@@ -423,7 +456,7 @@ class DsrExportResponse(BaseModel):
     consent_events: list[dict]
     dsr_history: list[dict]
     data_summary: dict
-    generated_on: str
+    generated_on: datetime
 
 
 class DsrCorrectionCreateRequest(BaseModel):
@@ -450,9 +483,9 @@ class DsrCorrectionResponse(BaseModel):
     status: str
     review_note: str | None = None
     reviewed_by_user_id: int | None = None
-    reviewed_on: str | None = None
-    created_on: str
-    updated_on: str
+    reviewed_on: datetime | None = None
+    created_on: datetime
+    updated_on: datetime
 
 
 class BreachIncidentCreateRequest(BaseModel):
@@ -462,8 +495,8 @@ class BreachIncidentCreateRequest(BaseModel):
     impact_summary: str | None = Field(default=None, max_length=2000)
     affected_data_types: str | None = Field(default=None, max_length=1000)
     affected_records: int | None = Field(default=None, ge=0)
-    occurred_on: str | None = Field(default=None, min_length=10, max_length=50)
-    detected_on: str = Field(min_length=10, max_length=50)
+    occurred_on: datetime | None = Field(default=None)
+    detected_on: datetime = Field(...)
 
 
 class BreachIncidentUpdateRequest(BaseModel):
@@ -471,9 +504,9 @@ class BreachIncidentUpdateRequest(BaseModel):
     impact_summary: str | None = Field(default=None, max_length=2000)
     affected_records: int | None = Field(default=None, ge=0)
     reported_to_ndpc: bool | None = None
-    ndpc_reported_on: str | None = Field(default=None, min_length=10, max_length=50)
-    contained_on: str | None = Field(default=None, min_length=10, max_length=50)
-    resolved_on: str | None = Field(default=None, min_length=10, max_length=50)
+    ndpc_reported_on: datetime | None = Field(default=None)
+    contained_on: datetime | None = Field(default=None)
+    resolved_on: datetime | None = Field(default=None)
     resolution_note: str | None = Field(default=None, max_length=1000)
 
 
@@ -486,22 +519,22 @@ class BreachIncidentResponse(BaseModel):
     impact_summary: str | None = None
     affected_data_types: str | None = None
     affected_records: int | None = None
-    occurred_on: str | None = None
-    detected_on: str
+    occurred_on: datetime | None = None
+    detected_on: datetime
     reported_to_ndpc: bool
-    ndpc_reported_on: str | None = None
-    contained_on: str | None = None
-    resolved_on: str | None = None
+    ndpc_reported_on: datetime | None = None
+    contained_on: datetime | None = None
+    resolved_on: datetime | None = None
     resolution_note: str | None = None
-    notification_deadline: str | None = None
+    notification_deadline: datetime | None = None
     escalation_triggered: bool
-    escalation_triggered_at: str | None = None
+    escalation_triggered_at: datetime | None = None
     sla_status: str | None = None
     days_until_deadline: int | None = None
     created_by_user_id: int
     updated_by_user_id: int
-    created_on: str
-    updated_on: str
+    created_on: datetime
+    updated_on: datetime
 
 
 class RetentionRunRequest(BaseModel):
@@ -517,7 +550,7 @@ class RetentionRunResponse(BaseModel):
     deleted_notifications: int
     deleted_audit_events: int
     deleted_expired_sessions: int
-    executed_on: str
+    executed_on: datetime
 
 
 class BreachSlaStatusResponse(BaseModel):
@@ -526,8 +559,8 @@ class BreachSlaStatusResponse(BaseModel):
     title: str
     severity: str
     status: str
-    detected_on: str
-    notification_deadline: str | None
+    detected_on: datetime
+    notification_deadline: datetime | None
     days_until_deadline: int | None
     sla_status: str  # "on-track", "at-risk" (< 24h), "overdue", "notified"
     escalation_triggered: bool
@@ -551,13 +584,13 @@ class PracticeSealResponse(BaseModel):
     cpd_points: int
     cpd_compliant: bool  # True if bpf_paid AND cpd_points >= 5
     aplineligible: bool  # True if bpf_paid (Annual Practising List eligible)
-    seal_uploaded_at: str | None
-    seal_expires_at: str | None
-    verified_on: str | None
+    seal_uploaded_at: datetime | None
+    seal_expires_at: datetime | None
+    verified_on: datetime | None
     verified_by_user_id: int | None
     source: str  # "manual", "nba_api", "csv_import", "admin_override"
-    created_on: str
-    updated_on: str
+    created_on: datetime
+    updated_on: datetime
 
 
 class PracticeSealCheckResponse(BaseModel):

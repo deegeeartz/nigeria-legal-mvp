@@ -61,10 +61,11 @@ router = APIRouter(tags=["messaging"])
 
 
 @router.get("/api/conversations", response_model=list[ConversationResponse])
-def list_conversations_endpoint(
+async def list_conversations_endpoint(
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> list[ConversationResponse]:
-    user = require_user(x_auth_token)
+    user = await require_user(x_auth_token)
+    conversations = await list_conversations_for_user(user)
     return [
         ConversationResponse(
             conversation_id=item["id"],
@@ -73,23 +74,24 @@ def list_conversations_endpoint(
             status=item["status"],
             created_on=item["created_on"],
         )
-        for item in list_conversations_for_user(user)
+        for item in conversations
     ]
 
 
 @router.post("/api/conversations", response_model=ConversationResponse)
-def open_conversation(
+async def open_conversation(
     payload: ConversationCreateRequest,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> ConversationResponse:
-    user = require_client(x_auth_token)
-    created = create_conversation(user["id"], payload.lawyer_id, payload.initial_message)
+    user = await require_client(x_auth_token)
+    created = await create_conversation(user["id"], payload.lawyer_id, payload.initial_message)
     if created is None:
         raise HTTPException(status_code=404, detail="Lawyer not found")
-    conversation, _ = created
-    log_event(user["id"], "conversation.created", "conversation", str(conversation["id"]), "Client opened a conversation")
-    notify_users(
-        list_conversation_participant_user_ids(conversation["id"]),
+    conversation = created
+    await log_event(user["id"], "conversation.created", "conversation", str(conversation["id"]), "Client opened a conversation")
+    participant_ids = await list_conversation_participant_user_ids(conversation["id"])
+    await notify_users(
+        participant_ids,
         kind="message_received",
         title="New conversation started",
         body=payload.initial_message[:140],
@@ -106,14 +108,14 @@ def open_conversation(
     )
 
 @router.get("/api/conversations/{conversation_id}", response_model=ConversationResponse)
-def get_conversation_endpoint(
+async def get_conversation_endpoint(
     conversation_id: int,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> ConversationResponse:
-    user = require_user(x_auth_token)
-    if not user_can_access_conversation(user, conversation_id):
+    user = await require_user(x_auth_token)
+    if not await user_can_access_conversation(user, conversation_id):
         raise HTTPException(status_code=403, detail="Conversation access denied")
-    conversation = get_conversation(conversation_id)
+    conversation = await get_conversation(conversation_id)
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return ConversationResponse(
@@ -130,18 +132,18 @@ async def send_message(
     payload: MessageCreateRequest,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> MessageResponse:
-    user = require_user(x_auth_token)
-    if not user_can_access_conversation(user, conversation_id):
+    user = await require_user(x_auth_token)
+    if not await user_can_access_conversation(user, conversation_id):
         raise HTTPException(status_code=403, detail="Conversation access denied")
     
-    message = create_message(conversation_id, user["id"], payload.body)
+    message = await create_message(conversation_id, user["id"], payload.body)
     if message is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
     
-    log_event(user["id"], "message.sent", "message", str(message["id"]), f"Message sent in conversation {conversation_id}")
+    await log_event(user["id"], "message.sent", "message", str(message["id"]), f"Message sent in conversation {conversation_id}")
     
     # WebSocket Broadcast
-    participant_ids = list_conversation_participant_user_ids(conversation_id)
+    participant_ids = await list_conversation_participant_user_ids(conversation_id)
     ws_payload = {
         "event": "new_message",
         "timestamp": datetime.now(UTC).isoformat(),
@@ -155,7 +157,7 @@ async def send_message(
     }
     await manager.broadcast_to_users(ws_payload, participant_ids)
 
-    notify_users(
+    await notify_users(
         participant_ids,
         kind="message_received",
         title="New message received",
@@ -180,7 +182,7 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
         await websocket.close(code=1008)
         return
     
-    user = get_user_by_access_token(token)
+    user = await get_user_by_access_token(token)
     if not user:
         await websocket.close(code=1008)
         return
@@ -197,13 +199,14 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
 
 
 @router.get("/api/conversations/{conversation_id}/messages", response_model=list[MessageResponse])
-def get_messages(
+async def get_messages(
     conversation_id: int,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> list[MessageResponse]:
-    user = require_user(x_auth_token)
-    if not user_can_access_conversation(user, conversation_id):
+    user = await require_user(x_auth_token)
+    if not await user_can_access_conversation(user, conversation_id):
         raise HTTPException(status_code=403, detail="Conversation access denied")
+    messages = await list_messages(conversation_id)
     return [
         MessageResponse(
             message_id=item["id"], 
@@ -212,5 +215,5 @@ def get_messages(
             body=item["body"], 
             created_on=item["created_on"]
         ) 
-        for item in list_messages(conversation_id)
+        for item in messages
     ]

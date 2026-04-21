@@ -94,7 +94,7 @@ def _normalize(value: float, floor: float, ceiling: float) -> float:
     return ((value - floor) / (ceiling - floor)) * 100
 
 
-def _build_component_scores(lawyer: Lawyer, intake: IntakeRequest, category: str) -> Dict[str, float]:
+async def _build_component_scores(lawyer: Lawyer, intake: IntakeRequest, category: str) -> Dict[str, float]:
     expertise_fit = 100.0 if category == "general" or category in lawyer.practice_areas else 30.0
     trust_verification = 60.0
     if lawyer.nin_verified:
@@ -103,10 +103,12 @@ def _build_component_scores(lawyer: Lawyer, intake: IntakeRequest, category: str
         trust_verification += 20
     if lawyer.bvn_verified:
         trust_verification += 5
+    if lawyer.is_san:
+        trust_verification += 5
     
     # Add seal & stamp bonus (+10 points) if lawyer is CPD-compliant
     from app.db import get_latest_practice_seal
-    seal = get_latest_practice_seal(lawyer.id)
+    seal = await get_latest_practice_seal(lawyer.id)
     if seal and seal.get("cpd_compliant"):
         trust_verification += 10
     
@@ -163,16 +165,30 @@ def _build_reasons(lawyer: Lawyer, category: str, score: float) -> List[MatchRea
     return reasons[:3]
 
 
-def rank_lawyers(intake: IntakeRequest, lawyers: List[Lawyer], top_n: int = 10) -> Tuple[str, int, List[dict]]:
+async def rank_lawyers(intake: IntakeRequest, lawyers: List[Lawyer], top_n: int = 10) -> Tuple[str, int, List[dict]]:
     category = classify_intake(intake.summary)
 
     eligible_lawyers = [lawyer for lawyer in lawyers if is_eligible_for_listing(lawyer)]
     state_lawyers = [lawyer for lawyer in eligible_lawyers if lawyer.state.lower() == intake.state.lower()]
     pool = state_lawyers if state_lawyers else eligible_lawyers
 
+    # Filter by court type if requested
+    if intake.court_type:
+        pool = [
+            lawyer for lawyer in pool
+            if lawyer.court_admissions and intake.court_type in lawyer.court_admissions
+        ]
+
+    # Filter by legal system if requested
+    if intake.legal_system:
+        pool = [
+            lawyer for lawyer in pool
+            if lawyer.legal_system == intake.legal_system
+        ]
+
     scored = []
     for lawyer in pool:
-        components = _build_component_scores(lawyer, intake, category)
+        components = await _build_component_scores(lawyer, intake, category)
         total = _total_score(components)
         scored.append((lawyer, total, components))
 
@@ -212,9 +228,11 @@ def rank_lawyers(intake: IntakeRequest, lawyers: List[Lawyer], top_n: int = 10) 
         badges = [tier.value.replace("_", " ").title(), "NIN Verified", "NBA Verified"]
         if lawyer.bvn_verified:
             badges.append("BVN Verified")
+        if lawyer.is_san:
+            badges.append("Senior Advocate of Nigeria")
         
         # Add seal badge if lawyer is CPD-compliant
-        seal = get_latest_practice_seal(lawyer.id)
+        seal = await get_latest_practice_seal(lawyer.id)
         if seal and seal.get("cpd_compliant"):
             seal_year = seal.get("practice_year", "")
             badges.append(f"Seal & Stamp {seal_year}")
@@ -227,6 +245,7 @@ def rank_lawyers(intake: IntakeRequest, lawyers: List[Lawyer], top_n: int = 10) 
                 "tier": tier,
                 "score": total,
                 "price_ngn": lawyer.base_consult_fee_ngn,
+                "price_display": lawyer.price_display,
                 "why_recommended": _build_reasons(lawyer, category, total),
                 "badges": badges,
             }

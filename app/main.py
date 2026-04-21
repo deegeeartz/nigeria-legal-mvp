@@ -15,26 +15,9 @@ from app.db import (
     seed_lawyers_if_empty,
     seed_users_if_empty,
 )
-from app.settings import validate_runtime_configuration
+from app.settings import validate_runtime_configuration, ENVIRONMENT, _env_int, _env_bool, CORS_ALLOWED_ORIGINS
 
 from app.routers import auth, kyc, lawyers, system, messaging, consultations, payments, compliance
-
-def _env_int(name: str, default: int) -> int:
-    raw_value = os.getenv(name)
-    if raw_value is None:
-        return default
-    try:
-        parsed = int(raw_value)
-    except ValueError:
-        return default
-    return parsed if parsed > 0 else default
-
-
-def _env_bool(name: str, default: bool) -> bool:
-    raw_value = os.getenv(name)
-    if raw_value is None:
-        return default
-    return raw_value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -47,24 +30,31 @@ logger = logging.getLogger("legal_mvp")
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     validate_runtime_configuration()
-    init_db()
-    seed_lawyers_if_empty()
-    seed_users_if_empty()
+    await init_db()
+    await seed_lawyers_if_empty()
+    await seed_users_if_empty()
     yield
 
 app = FastAPI(title="Nigeria Legal Marketplace MVP", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Auth-Token", "X-Request-Id"],
 )
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if ENVIRONMENT in {"staging", "production"}:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 @app.middleware("http")
 async def request_observability_middleware(request: Request, call_next):

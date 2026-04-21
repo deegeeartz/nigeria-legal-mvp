@@ -31,12 +31,12 @@ from app.db import (
     update_dsr_request_status,
     get_lawyer,
     upsert_practice_seal,
-    get_practice_seal,
     get_latest_practice_seal,
     list_compliant_lawyers,
     list_seal_events,
     UPLOADS_DIR,
 )
+from app.repos.compliance import get_practice_seal
 from app.models import (
     BreachIncidentCreateRequest,
     BreachIncidentResponse,
@@ -148,13 +148,13 @@ def _to_breach_response(item: dict) -> BreachIncidentResponse:
 
 
 @router.post("/consents", response_model=ConsentEventResponse)
-def create_consent(
+async def create_consent(
     payload: ConsentEventCreateRequest,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> ConsentEventResponse:
-    user = require_user(x_auth_token)
+    user = await require_user(x_auth_token)
     metadata_json = json.dumps(payload.metadata, ensure_ascii=False) if payload.metadata is not None else None
-    created = create_consent_event(
+    created = await create_consent_event(
         user_id=user["id"],
         purpose=payload.purpose,
         lawful_basis=payload.lawful_basis,
@@ -162,71 +162,74 @@ def create_consent(
         policy_version=payload.policy_version,
         metadata_json=metadata_json,
     )
-    log_event(user["id"], "compliance.consent_recorded", "consent_event", str(created["id"]), "Consent event recorded")
+    await log_event(user["id"], "compliance.consent_recorded", "consent_event", str(created["id"]), "Consent event recorded")
     return _to_consent_response(created)
 
 
 @router.get("/consents/me", response_model=list[ConsentEventResponse])
-def list_my_consents(
+async def list_my_consents(
     limit: int = Query(default=100, ge=1, le=500),
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> list[ConsentEventResponse]:
-    user = require_user(x_auth_token)
-    return [_to_consent_response(item) for item in list_consent_events_for_user(user["id"], limit)]
+    user = await require_user(x_auth_token)
+    rows = await list_consent_events_for_user(user["id"], limit)
+    return [_to_consent_response(item) for item in rows]
 
 
 @router.post("/dsr-requests", response_model=DsrRequestResponse)
-def create_dsr(
+async def create_dsr(
     payload: DsrRequestCreateRequest,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> DsrRequestResponse:
-    user = require_user(x_auth_token)
-    created = create_dsr_request(user["id"], payload.request_type, payload.detail)
-    log_event(user["id"], "compliance.dsr_created", "dsr_request", str(created["id"]), "Data subject request submitted")
+    user = await require_user(x_auth_token)
+    created = await create_dsr_request(user["id"], payload.request_type, payload.detail)
+    await log_event(user["id"], "compliance.dsr_created", "dsr_request", str(created["id"]), "Data subject request submitted")
     return _to_dsr_response(created)
 
 
 @router.get("/dsr-requests/me", response_model=list[DsrRequestResponse])
-def list_my_dsr_requests(
+async def list_my_dsr_requests(
     limit: int = Query(default=100, ge=1, le=500),
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> list[DsrRequestResponse]:
-    user = require_user(x_auth_token)
-    return [_to_dsr_response(item) for item in list_dsr_requests_for_user(user["id"], limit)]
+    user = await require_user(x_auth_token)
+    rows = await list_dsr_requests_for_user(user["id"], limit)
+    return [_to_dsr_response(item) for item in rows]
 
 
 @router.get("/dsr-requests", response_model=list[DsrRequestResponse])
-def list_all_dsr_requests(
+async def list_all_dsr_requests(
     status: str | None = Query(default=None, pattern="^(submitted|in_review|completed|rejected)$"),
     limit: int = Query(default=200, ge=1, le=500),
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> list[DsrRequestResponse]:
-    require_admin(x_auth_token)
-    return [_to_dsr_response(item) for item in list_dsr_requests(status, limit)]
+    await require_admin(x_auth_token)
+    rows = await list_dsr_requests(status, limit)
+    return [_to_dsr_response(item) for item in rows]
 
 
 @router.patch("/dsr-requests/{dsr_request_id}", response_model=DsrRequestResponse)
-def update_dsr_request(
+async def update_dsr_request(
     dsr_request_id: int,
     payload: DsrRequestStatusUpdateRequest,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> DsrRequestResponse:
-    admin_user = require_admin(x_auth_token)
-    updated = update_dsr_request_status(dsr_request_id, payload.status, payload.resolution_note, admin_user["id"])
+    admin_user = await require_admin(x_auth_token)
+    updated = await update_dsr_request_status(dsr_request_id, payload.status, payload.resolution_note, admin_user["id"])
     if updated is None:
         raise HTTPException(status_code=404, detail="DSR request not found")
-    log_event(admin_user["id"], "compliance.dsr_updated", "dsr_request", str(dsr_request_id), f"DSR updated to {payload.status}")
+    await log_event(admin_user["id"], "compliance.dsr_updated", "dsr_request", str(dsr_request_id), f"DSR updated to {payload.status}")
     return _to_dsr_response(updated)
 
 
 @router.post("/retention/run", response_model=RetentionRunResponse)
-def run_retention(
+async def run_retention(
     payload: RetentionRunRequest,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> RetentionRunResponse:
-    admin_user = require_admin(x_auth_token)
-    result = run_retention_job(payload.retention_days, payload.dry_run)
-    log_event(
+    admin_user = await require_admin(x_auth_token)
+    result = await run_retention_job(payload.retention_days, payload.dry_run)
+    await log_event(
         admin_user["id"],
         "compliance.retention_run",
         "retention_job",
@@ -237,95 +240,97 @@ def run_retention(
 
 
 @router.get("/dsr-requests/{dsr_request_id}/export", response_model=DsrExportResponse)
-def export_dsr_request_data(
+async def export_dsr_request_data(
     dsr_request_id: int,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> DsrExportResponse:
-    admin_user = require_admin(x_auth_token)
-    bundle = build_dsr_export_bundle(dsr_request_id)
+    admin_user = await require_admin(x_auth_token)
+    bundle = await build_dsr_export_bundle(dsr_request_id)
     if bundle is None:
         raise HTTPException(status_code=404, detail="DSR request not found")
-    log_event(admin_user["id"], "compliance.dsr_exported", "dsr_request", str(dsr_request_id), "DSR export generated")
+    await log_event(admin_user["id"], "compliance.dsr_exported", "dsr_request", str(dsr_request_id), "DSR export generated")
     return DsrExportResponse(**bundle)
 
 
 @router.post("/dsr-requests/{dsr_request_id}/execute-deletion", response_model=DsrDeletionExecuteResponse)
-def execute_dsr_deletion_request(
+async def execute_dsr_deletion_request(
     dsr_request_id: int,
     payload: DsrDeletionExecuteRequest,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> DsrDeletionExecuteResponse:
-    admin_user = require_admin(x_auth_token)
+    admin_user = await require_admin(x_auth_token)
     try:
-        result = execute_dsr_deletion(dsr_request_id, admin_user["id"], payload.resolution_note)
+        result = await execute_dsr_deletion(dsr_request_id, admin_user["id"], payload.resolution_note)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     if result is None:
         raise HTTPException(status_code=404, detail="DSR request not found")
-    log_event(admin_user["id"], "compliance.dsr_deletion_executed", "dsr_request", str(dsr_request_id), "DSR deletion executed")
+    await log_event(admin_user["id"], "compliance.dsr_deletion_executed", "dsr_request", str(dsr_request_id), "DSR deletion executed")
     return DsrDeletionExecuteResponse(**result)
 
 
 @router.post("/dsr-corrections", response_model=DsrCorrectionResponse)
-def create_dsr_correction(
+async def create_dsr_correction(
     payload: DsrCorrectionCreateRequest,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> DsrCorrectionResponse:
-    user = require_user(x_auth_token)
-    created = create_dsr_correction_request(
+    user = await require_user(x_auth_token)
+    created = await create_dsr_correction_request(
         user_id=user["id"],
         field_name=payload.field_name,
         requested_value=payload.requested_value,
         justification=payload.justification,
         evidence=payload.evidence,
     )
-    log_event(user["id"], "compliance.dsr_correction_created", "dsr_correction", str(created["id"]), "DSR correction request submitted")
+    await log_event(user["id"], "compliance.dsr_correction_created", "dsr_correction", str(created["id"]), "DSR correction request submitted")
     return _to_correction_response(created)
 
 
 @router.get("/dsr-corrections/me", response_model=list[DsrCorrectionResponse])
-def list_my_dsr_corrections(
+async def list_my_dsr_corrections(
     limit: int = Query(default=100, ge=1, le=500),
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> list[DsrCorrectionResponse]:
-    user = require_user(x_auth_token)
-    return [_to_correction_response(item) for item in list_dsr_corrections_for_user(user["id"], limit)]
+    user = await require_user(x_auth_token)
+    rows = await list_dsr_corrections_for_user(user["id"], limit)
+    return [_to_correction_response(item) for item in rows]
 
 
 @router.get("/dsr-corrections", response_model=list[DsrCorrectionResponse])
-def list_all_dsr_corrections(
+async def list_all_dsr_corrections(
     status: str | None = Query(default=None, pattern="^(submitted|approved|rejected)$"),
     limit: int = Query(default=200, ge=1, le=500),
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> list[DsrCorrectionResponse]:
-    require_admin(x_auth_token)
-    return [_to_correction_response(item) for item in list_dsr_corrections(status, limit)]
+    await require_admin(x_auth_token)
+    rows = await list_dsr_corrections(status, limit)
+    return [_to_correction_response(item) for item in rows]
 
 
 @router.patch("/dsr-corrections/{correction_id}", response_model=DsrCorrectionResponse)
-def review_correction_request(
+async def review_correction_request(
     correction_id: int,
     payload: DsrCorrectionReviewRequest,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> DsrCorrectionResponse:
-    admin_user = require_admin(x_auth_token)
+    admin_user = await require_admin(x_auth_token)
     try:
-        updated = review_dsr_correction(correction_id, payload.status, payload.review_note, admin_user["id"])
+        updated = await review_dsr_correction(correction_id, payload.status, payload.review_note, admin_user["id"])
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     if updated is None:
         raise HTTPException(status_code=404, detail="DSR correction request not found")
-    log_event(admin_user["id"], "compliance.dsr_correction_reviewed", "dsr_correction", str(correction_id), f"Correction request reviewed: {payload.status}")
+    await log_event(admin_user["id"], "compliance.dsr_correction_reviewed", "dsr_correction", str(correction_id), f"Correction request reviewed: {payload.status}")
     return _to_correction_response(updated)
 
 
 @router.post("/breach-incidents", response_model=BreachIncidentResponse)
-def create_breach_incident_endpoint(
+async def create_breach_incident_endpoint(
     payload: BreachIncidentCreateRequest,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> BreachIncidentResponse:
-    admin_user = require_admin(x_auth_token)
-    created = create_breach_incident(
+    admin_user = await require_admin(x_auth_token)
+    created = await create_breach_incident(
         title=payload.title,
         severity=payload.severity,
         description=payload.description,
@@ -336,28 +341,29 @@ def create_breach_incident_endpoint(
         detected_on=payload.detected_on,
         actor_user_id=admin_user["id"],
     )
-    log_event(admin_user["id"], "compliance.breach_created", "breach_incident", str(created["id"]), "Breach incident created")
+    await log_event(admin_user["id"], "compliance.breach_created", "breach_incident", str(created["id"]), "Breach incident created")
     return _to_breach_response(created)
 
 
 @router.get("/breach-incidents", response_model=list[BreachIncidentResponse])
-def list_breach_incidents_endpoint(
+async def list_breach_incidents_endpoint(
     status: str | None = Query(default=None, pattern="^(open|investigating|contained|resolved)$"),
     limit: int = Query(default=200, ge=1, le=500),
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> list[BreachIncidentResponse]:
-    require_admin(x_auth_token)
-    return [_to_breach_response(item) for item in list_breach_incidents(status, limit)]
+    await require_admin(x_auth_token)
+    rows = await list_breach_incidents(status, limit)
+    return [_to_breach_response(item) for item in rows]
 
 
 @router.patch("/breach-incidents/{breach_incident_id}", response_model=BreachIncidentResponse)
-def update_breach_incident_endpoint(
+async def update_breach_incident_endpoint(
     breach_incident_id: int,
     payload: BreachIncidentUpdateRequest,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> BreachIncidentResponse:
-    admin_user = require_admin(x_auth_token)
-    updated = update_breach_incident(
+    admin_user = await require_admin(x_auth_token)
+    updated = await update_breach_incident(
         breach_incident_id=breach_incident_id,
         actor_user_id=admin_user["id"],
         status=payload.status,
@@ -371,12 +377,12 @@ def update_breach_incident_endpoint(
     )
     if updated is None:
         raise HTTPException(status_code=404, detail="Breach incident not found")
-    log_event(admin_user["id"], "compliance.breach_updated", "breach_incident", str(breach_incident_id), f"Breach incident status set to {payload.status}")
+    await log_event(admin_user["id"], "compliance.breach_updated", "breach_incident", str(breach_incident_id), f"Breach incident status set to {payload.status}")
     return _to_breach_response(updated)
 
 
 @router.get("/breach-incidents/sla-status", response_model=list[BreachSlaStatusResponse])
-def list_breach_incidents_sla_status(
+async def list_breach_incidents_sla_status(
     sla_status: Optional[str] = Query(default=None, pattern="^(on-track|at-risk|overdue|notified)$"),
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> list[BreachSlaStatusResponse]:
@@ -392,8 +398,8 @@ def list_breach_incidents_sla_status(
             return val.isoformat()
         return val
     
-    require_admin(x_auth_token)
-    breaches = list_breach_incidents_by_sla_status(sla_status=sla_status)
+    await require_admin(x_auth_token)
+    breaches = await list_breach_incidents_by_sla_status(sla_status=sla_status)
     return [
         BreachSlaStatusResponse(
             breach_incident_id=b["id"],
@@ -412,7 +418,7 @@ def list_breach_incidents_sla_status(
 
 
 @router.post("/breach-incidents/{breach_incident_id}/escalate", response_model=dict)
-def escalate_breach_incident_sla(
+async def escalate_breach_incident_sla(
     breach_incident_id: int,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> dict:
@@ -421,17 +427,17 @@ def escalate_breach_incident_sla(
     Admin-only operation. Sets escalation_triggered flag and logs audit event.
     Recommended when days_until_deadline <= 1 or sla_status == 'overdue'.
     """
-    admin_user = require_admin(x_auth_token)
+    admin_user = await require_admin(x_auth_token)
     
-    breach = get_breach_incident(breach_incident_id)
+    breach = await get_breach_incident(breach_incident_id)
     if breach is None:
         raise HTTPException(status_code=404, detail="Breach incident not found")
     
-    escalated = trigger_breach_escalation(breach_incident_id, admin_user["id"])
+    escalated = await trigger_breach_escalation(breach_incident_id, admin_user["id"])
     if escalated is None:
         raise HTTPException(status_code=500, detail="Failed to trigger escalation")
     
-    log_event(
+    await log_event(
         admin_user["id"],
         "compliance.breach_escalated",
         "breach_incident",
@@ -451,7 +457,7 @@ def escalate_breach_incident_sla(
 # ===== PRACTICE SEAL & APL/CPD COMPLIANCE =====
 
 @router.post("/practice-seal/upload", response_model=PracticeSealResponse)
-def upload_practice_seal(
+async def upload_practice_seal(
     lawyer_id: str = Query(..., min_length=3, max_length=40),
     practice_year: int = Query(..., ge=2025, le=2030),
     bpf_paid: bool = Query(True),
@@ -473,10 +479,10 @@ def upload_practice_seal(
     from secrets import token_hex
     
     # Require user (lawyer can upload own seal, admin can upload for any lawyer)
-    user = require_user(x_auth_token)
+    user = await require_user(x_auth_token)
     
     # Verify lawyer exists
-    lawyer = get_lawyer(lawyer_id)
+    lawyer = await get_lawyer(lawyer_id)
     if lawyer is None:
         raise HTTPException(status_code=404, detail="Lawyer not found")
     
@@ -494,7 +500,7 @@ def upload_practice_seal(
         from app.db import UPLOADS_DIR
         
         # Read and scan document
-        file_bytes = seal_document.file.read()
+        file_bytes = await seal_document.read()
         
         try:
             scan_upload_for_malware(file_bytes)
@@ -518,7 +524,7 @@ def upload_practice_seal(
         file_path.write_bytes(encrypted_file_bytes)
     
     # Upsert seal record
-    seal_record = upsert_practice_seal(
+    seal_record = await upsert_practice_seal(
         lawyer_id=lawyer_id,
         practice_year=practice_year,
         bpf_paid=bpf_paid,
@@ -530,12 +536,12 @@ def upload_practice_seal(
     )
     
     # Log event
-    log_event(
+    await log_event(
         user["id"],
         "compliance.seal_uploaded",
         "lawyer_practice_seal",
         lawyer_id,
-        f"Seal uploaded for {practice_year}: BPF={bpf_paid}, CPD points={cpd_points}",
+        f"Seal uploaded for {practice_year}: BPF paid={bpf_paid}, CPD points={cpd_points}",
     )
     
     # Convert datetime to ISO string if needed
@@ -560,7 +566,7 @@ def upload_practice_seal(
 
 
 @router.get("/practice-seal/check", response_model=PracticeSealCheckResponse)
-def check_practice_seal(
+async def check_practice_seal(
     lawyer_id: str = Query(..., min_length=3, max_length=40),
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> dict:
@@ -571,11 +577,11 @@ def check_practice_seal(
     """
     from datetime import datetime, UTC
     
-    lawyer = get_lawyer(lawyer_id)
+    lawyer = await get_lawyer(lawyer_id)
     if lawyer is None:
         raise HTTPException(status_code=404, detail="Lawyer not found")
     
-    seal = get_latest_practice_seal(lawyer_id)
+    seal = await get_latest_practice_seal(lawyer_id)
     
     now = datetime.now(UTC).date().isoformat()
     has_valid_seal = False
@@ -608,7 +614,7 @@ def check_practice_seal(
 
 
 @router.get("/practice-seal/{lawyer_id}", response_model=PracticeSealResponse | None)
-def get_lawyer_practice_seal(
+async def get_lawyer_practice_seal(
     lawyer_id: str,
     practice_year: int = Query(..., ge=2025, le=2030),
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
@@ -618,7 +624,7 @@ def get_lawyer_practice_seal(
     Public endpoint (no auth required) - seal compliance info is public trust signal.
     Does NOT return encrypted seal document (file_key is not included).
     """
-    seal = get_practice_seal(lawyer_id, practice_year)
+    seal = await get_practice_seal(lawyer_id, practice_year)
     if seal is None:
         return None
     
@@ -644,7 +650,7 @@ def get_lawyer_practice_seal(
 
 
 @router.get("/practising-list", response_model=list[dict])
-def list_apl_compliant_lawyers(
+async def list_apl_compliant_lawyers(
     practice_year: int = Query(2026),
     limit: int = Query(500, ge=10, le=5000),
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
@@ -659,7 +665,7 @@ def list_apl_compliant_lawyers(
     
     Public endpoint - APL compliance is public record in Nigeria.
     """
-    compliant_lawyers = list_compliant_lawyers(practice_year, limit)
+    compliant_lawyers = await list_compliant_lawyers(practice_year, limit)
     
     return [
         {
@@ -675,7 +681,7 @@ def list_apl_compliant_lawyers(
 
 
 @router.post("/practice-seal/{lawyer_id}/verify", response_model=dict)
-def admin_verify_practice_seal(
+async def admin_verify_practice_seal(
     lawyer_id: str,
     practice_year: int = Query(..., ge=2025, le=2030),
     bpf_paid: bool = Query(...),
@@ -689,14 +695,14 @@ def admin_verify_practice_seal(
     Admin-only operation. Used to confirm BPF payment and CPD points from
     external NBA sources or manual audit. Sets verified_on and verified_by_user_id.
     """
-    admin_user = require_admin(x_auth_token)
+    admin_user = await require_admin(x_auth_token)
     
-    lawyer = get_lawyer(lawyer_id)
+    lawyer = await get_lawyer(lawyer_id)
     if lawyer is None:
         raise HTTPException(status_code=404, detail="Lawyer not found")
     
     # Upsert seal with admin verification
-    seal_record = upsert_practice_seal(
+    seal_record = await upsert_practice_seal(
         lawyer_id=lawyer_id,
         practice_year=practice_year,
         bpf_paid=bpf_paid,
@@ -706,7 +712,7 @@ def admin_verify_practice_seal(
         verification_notes=verification_notes,
     )
     
-    log_event(
+    await log_event(
         admin_user["id"],
         "compliance.seal_verified",
         "lawyer_practice_seal",
@@ -725,7 +731,7 @@ def admin_verify_practice_seal(
 
 
 @router.get("/practice-seal/{lawyer_id}/audit-trail", response_model=list[dict])
-def get_seal_audit_trail(
+async def get_seal_audit_trail(
     lawyer_id: str,
     practice_year: int = Query(None),
     limit: int = Query(100, ge=10, le=1000),
@@ -736,9 +742,9 @@ def get_seal_audit_trail(
     Admin-only endpoint for compliance auditing. Shows all actions taken on
     lawyer's seals with timestamps and actor information.
     """
-    admin_user = require_admin(x_auth_token)
+    admin_user = await require_admin(x_auth_token)
     
-    seal_events = list_seal_events(lawyer_id, practice_year, limit)
+    seal_events = await list_seal_events(lawyer_id, practice_year, limit)
     
     return [
         {
@@ -752,7 +758,7 @@ def get_seal_audit_trail(
 
 
 @router.get("/practice-seal/{lawyer_id}/document/download")
-def admin_download_seal_document(
+async def admin_download_seal_document(
     lawyer_id: str,
     practice_year: int = Query(..., ge=2025, le=2030),
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
@@ -760,9 +766,9 @@ def admin_download_seal_document(
     """Admin-only endpoint to download and decrypt stored stamp/seal document."""
     from app.security import decrypt_seal_bytes, SealEncryptionError
 
-    admin_user = require_admin(x_auth_token)
+    admin_user = await require_admin(x_auth_token)
 
-    seal = get_practice_seal(lawyer_id, practice_year)
+    seal = await get_practice_seal(lawyer_id, practice_year)
     if seal is None:
         raise HTTPException(status_code=404, detail="Seal record not found")
 
@@ -789,7 +795,7 @@ def admin_download_seal_document(
 
     download_filename = f"stamp_seal_{lawyer_id}_{practice_year}.{extension}"
 
-    log_event(
+    await log_event(
         admin_user["id"],
         "compliance.seal_document_downloaded",
         "lawyer_practice_seal",

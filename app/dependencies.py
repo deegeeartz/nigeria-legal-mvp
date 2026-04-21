@@ -3,11 +3,6 @@ from time import time
 from threading import Lock
 import logging
 from fastapi import HTTPException
-from app.db import (
-    get_user_by_access_token,
-    create_audit_event,
-    create_notification,
-)
 from app.settings import (
     AUTH_RATE_LIMIT_WINDOW_SECONDS,
     LOGIN_FAILURE_LIMIT,
@@ -126,10 +121,11 @@ def reset_auth_rate_limits_for_tests() -> None:
         _failed_refresh_attempts.clear()
 
 
-def log_event(actor_user_id: int | None, action: str, resource_type: str, resource_id: str | None, detail: str) -> None:
-    create_audit_event(actor_user_id, action, resource_type, resource_id, detail)
+async def log_event(actor_user_id: int | None, action: str, resource_type: str, resource_id: str | None, detail: str) -> None:
+    from app.db import log_audit_event
+    await log_audit_event(actor_user_id, action, resource_type, resource_id, detail)
 
-def notify_users(
+async def notify_users(
     user_ids: list[int],
     *,
     kind: str,
@@ -139,27 +135,36 @@ def notify_users(
     resource_id: str | None,
     exclude_user_id: int | None = None,
 ) -> None:
+    from app.db import create_notification
     for user_id in sorted(set(user_ids)):
         if exclude_user_id is not None and user_id == exclude_user_id:
             continue
-        create_notification(user_id, kind, title, body, resource_type, resource_id)
+        await create_notification(
+            user_id,
+            title,
+            body,
+            kind=kind,
+            resource_type=resource_type,
+            resource_id=resource_id,
+        )
 
-def require_user(token: str | None) -> dict:
+async def require_user(token: str | None) -> dict:
     if not token:
         raise HTTPException(status_code=401, detail="Missing auth token")
-    user = get_user_by_access_token(token)
+    from app.db import get_user_by_access_token
+    user = await get_user_by_access_token(token)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid auth token")
     return user
 
-def require_admin(token: str | None) -> dict:
-    user = require_user(token)
+async def require_admin(token: str | None) -> dict:
+    user = await require_user(token)
     if user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin role required")
     return user
 
-def require_client(token: str | None) -> dict:
-    user = require_user(token)
+async def require_client(token: str | None) -> dict:
+    user = await require_user(token)
     if user["role"] != "client":
         raise HTTPException(status_code=403, detail="Client role required")
     return user

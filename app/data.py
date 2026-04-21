@@ -21,10 +21,12 @@ SEED_LAWYERS = [
         repeat_client_rate=41,
         base_consult_fee_ngn=45000,
         active_complaints=0,
+        court_admissions=["state_high_court", "national_industrial"],
+        legal_system="common_law",
     ),
     Lawyer(
         id="lw_002",
-        full_name="Ibrahim Yusuf",
+        full_name="Ibrahim Yusuf SAN",
         state="Abuja",
         practice_areas=["property", "litigation"],
         years_called=14,
@@ -39,6 +41,9 @@ SEED_LAWYERS = [
         repeat_client_rate=34,
         base_consult_fee_ngn=60000,
         active_complaints=0,
+        is_san=True,
+        court_admissions=["federal_high_court", "state_high_court", "court_of_appeal", "sharia"],
+        legal_system="common_law",
     ),
     Lawyer(
         id="lw_003",
@@ -57,6 +62,8 @@ SEED_LAWYERS = [
         repeat_client_rate=22,
         base_consult_fee_ngn=30000,
         active_complaints=0,
+        court_admissions=["state_high_court", "customary"],
+        legal_system="common_law",
     ),
     Lawyer(
         id="lw_004",
@@ -78,7 +85,7 @@ SEED_LAWYERS = [
     ),
     Lawyer(
         id="lw_005",
-        full_name="Kemi Adegoke",
+        full_name="Kemi Adegoke SAN",
         state="Lagos",
         practice_areas=["employment", "labour"],
         years_called=11,
@@ -93,6 +100,9 @@ SEED_LAWYERS = [
         repeat_client_rate=52,
         base_consult_fee_ngn=70000,
         active_complaints=0,
+        is_san=True,
+        court_admissions=["federal_high_court", "state_high_court", "national_industrial", "court_of_appeal"],
+        legal_system="common_law",
     ),
     Lawyer(
         id="lw_006",
