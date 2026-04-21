@@ -49,6 +49,7 @@ async def lawyer_profile(lawyer_id: str) -> LawyerProfileResponse:
         state=lawyer.state,
         bar_chapter=lawyer.bar_chapter,
         practice_areas=lawyer.practice_areas,
+        pro_bono_practice_areas=lawyer.pro_bono_practice_areas,
         verification={
             "nin_verified": lawyer.nin_verified,
             "nba_verified": lawyer.nba_verified,

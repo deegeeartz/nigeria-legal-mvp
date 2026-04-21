@@ -20,7 +20,9 @@ from app.db import (
     update_payment_status,
     get_payment_by_reference,
     get_payment,
+    list_milestones,
 )
+from app.services.document_service import generate_tax_receipt
 from app.models import (
     PaymentCreateRequest,
     PaymentResponse,
@@ -43,7 +45,10 @@ def to_payment_response(payment: dict) -> PaymentResponse:
         reference=payment["reference"],
         provider=payment["provider"],
         amount_ngn=payment["amount_ngn"],
+        vat_amount_ngn=payment.get("vat_amount_ngn", 0),
+        total_plus_vat_ngn=payment.get("total_plus_vat_ngn", 0),
         status=payment["status"],
+        payment_method=payment.get("payment_method", "card"),
         created_on=payment["created_on"],
         access_code=payment.get("access_code"),
         authorization_url=payment.get("authorization_url"),
@@ -142,6 +147,13 @@ async def verify_paystack_reference(
         raise HTTPException(status_code=403, detail="Consultation access denied")
     
     updated = await verify_paystack_payment(reference, payload.outcome)
+    
+    # Auto-generate VAT Receipt on success
+    if payload.outcome == "success":
+        try:
+            await generate_tax_receipt(payment["id"])
+        except Exception as e:
+            await log_event(user["id"], "payment.receipt_generation_failed", "payment", str(payment["id"]), f"Receipt error: {str(e)}")
     await log_event(user["id"], "payment.verified", "payment", str(payment["id"]), f"Paystack verification outcome: {payload.outcome}")
     await notify_users(
         await list_consultation_participant_user_ids(payment["consultation_id"]),
@@ -168,6 +180,11 @@ async def simulate_payment_action(
     if not await user_can_access_consultation(user, payment["consultation_id"]):
         raise HTTPException(status_code=403, detail="Payment access denied")
     
+    if payload.action == "release":
+        milestones = await list_milestones(payment["consultation_id"])
+        if not any(m.get("status_label") == "completed" for m in milestones):
+            raise HTTPException(status_code=400, detail="Escrow release denied: No milestones are marked as completed for this consultation.")
+
     updated = await update_payment_status(payment_id, payload.action)
     await log_event(user["id"], f"payment.{payload.action}", "payment", str(payment_id), f"Payment action {payload.action} applied")
     await notify_users(
@@ -206,6 +223,12 @@ async def paystack_webhook(request: Request):
         payment = await get_payment_by_reference(reference)
         if payment:
             await verify_paystack_payment(reference, "success")
+            
+            # Generate VAT Receipt
+            try:
+                await generate_tax_receipt(payment["id"])
+            except:
+                pass
             
             # Broadcast update via WebSocket
             ws_payload = {

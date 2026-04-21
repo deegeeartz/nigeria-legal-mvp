@@ -8,17 +8,31 @@ from app.repos.connection import (
     _now,
     connect,
     _parse,
+    _db_bool,
 )
 
 
-async def create_consultation(client_user_id: int, lawyer_id: str, scheduled_for: str, summary: str, opposing_party_name: str | None = None) -> dict[str, Any]:
+async def create_consultation(
+    client_user_id: int, 
+    lawyer_id: str, 
+    scheduled_for: str, 
+    summary: str, 
+    opposing_party_name: str | None = None,
+    is_contingency: bool = False,
+    contingency_percentage: float | None = None
+) -> dict[str, Any]:
     # scheduled_for comes as ISO string from API
     scheduled_dt = _parse(scheduled_for)
     now = _now()
     async with connect() as conn:
         res = await conn.execute(
-            "INSERT INTO consultations (client_user_id, lawyer_id, scheduled_for, summary, status, created_on, opposing_party_name) VALUES (?, ?, ?, ?, 'pending', ?, ?)",
-            (client_user_id, lawyer_id, scheduled_dt, summary, now, opposing_party_name),
+            """
+            INSERT INTO consultations (
+                client_user_id, lawyer_id, scheduled_for, summary, status, created_on, 
+                opposing_party_name, is_contingency, contingency_percentage
+            ) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?)
+            """,
+            (client_user_id, lawyer_id, scheduled_dt, summary, now, opposing_party_name, _db_bool(is_contingency), contingency_percentage),
         )
         await conn.commit()
         cons_id = res.lastrowid
@@ -94,14 +108,14 @@ async def create_milestone(consultation_id: int, event_name: str, status_label: 
     async with connect() as conn:
         res = await conn.execute(
             """
-            INSERT INTO milestones (consultation_id, event_name, status_label, description, created_on)
+            INSERT INTO consultation_milestones (consultation_id, event_name, status_label, description, created_on)
             VALUES (?, ?, ?, ?, ?)
             """,
             (consultation_id, event_name, status_label, description, now),
         )
         await conn.commit()
         m_id = res.lastrowid
-        res2 = await conn.execute("SELECT * FROM milestones WHERE id = ?", (m_id,))
+        res2 = await conn.execute("SELECT * FROM consultation_milestones WHERE id = ?", (m_id,))
         row = res2.fetchone()
     return dict(row) if row else {}
 
@@ -109,7 +123,7 @@ async def create_milestone(consultation_id: int, event_name: str, status_label: 
 async def list_milestones(consultation_id: int) -> list[dict[str, Any]]:
     async with connect() as conn:
         res = await conn.execute(
-            "SELECT * FROM milestones WHERE consultation_id = ? ORDER BY created_on ASC",
+            "SELECT * FROM consultation_milestones WHERE consultation_id = ? ORDER BY created_on ASC",
             (consultation_id,),
         )
         rows = res.fetchall()

@@ -24,12 +24,16 @@ from app.db import (
     list_milestones,
     create_consultation_note,
     list_consultation_notes,
+    check_conflict,
+    create_payment,
 )
 from app.models import (
     ConsultationCreateRequest,
     ConsultationStatusUpdateRequest,
     ConsultationNoteCreateRequest,
     ConsultationNoteResponse,
+    SuccessFeeRequest,
+    PaymentResponse,
 )
 from app.services.document_service import generate_engagement_letter
 from app.security import scan_upload_for_malware, MalwareDetectedError, MalwareScanError
@@ -59,6 +63,8 @@ async def list_consultations_endpoint(
             status=item["status"],
             created_on=item["created_on"],
             opposing_party_name=item.get("opposing_party_name"),
+            is_contingency=item.get("is_contingency", False),
+            contingency_percentage=item.get("contingency_percentage"),
         )
         for item in await list_consultations_for_user(user)
     ]
@@ -75,7 +81,9 @@ async def book_consultation(
         payload.lawyer_id, 
         payload.scheduled_for, 
         payload.summary,
-        opposing_party_name=payload.opposing_party_name
+        opposing_party_name=payload.opposing_party_name,
+        is_contingency=payload.is_contingency,
+        contingency_percentage=payload.contingency_percentage
     )
     if consultation is None:
         raise HTTPException(status_code=404, detail="Lawyer not found")
@@ -193,6 +201,8 @@ async def update_consultation_status_endpoint(
         status=updated["status"],
         created_on=updated["created_on"],
         opposing_party_name=updated.get("opposing_party_name"),
+        is_contingency=updated.get("is_contingency", False),
+        contingency_percentage=updated.get("contingency_percentage"),
     )
 
 
@@ -377,4 +387,60 @@ async def get_notes_endpoint(
     lawyer_id = user["lawyer_id"] if user["role"] == "lawyer" else None
     notes = await list_consultation_notes(consultation_id, user_id=user["id"], lawyer_id=lawyer_id)
     return [ConsultationNoteResponse(**n) for n in notes]
+
+
+@router.post("/api/consultations/{consultation_id}/success-fee", response_model=PaymentResponse)
+async def create_success_fee_invoice(
+    consultation_id: int,
+    payload: SuccessFeeRequest,
+    x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
+) -> PaymentResponse:
+    user = await require_user(x_auth_token)
+    if user["role"] != "lawyer":
+        raise HTTPException(status_code=403, detail="Only lawyers can issue success fee invoices")
+    
+    if not await user_can_access_consultation(user, consultation_id):
+        raise HTTPException(status_code=403, detail="Consultation access denied")
+    
+    consultation = await get_consultation(consultation_id)
+    if not consultation.get("is_contingency"):
+        raise HTTPException(status_code=400, detail="This consultation does not have a contingency fee arrangement")
+    
+    percentage = consultation.get("contingency_percentage")
+    if not percentage:
+        raise HTTPException(status_code=400, detail="Contingency percentage not defined for this case")
+    
+    # Calculate amount: Recovered * Percentage
+    amount_ngn = int(payload.recovered_amount_ngn * (percentage / 100))
+    
+    # Create the payment (invoice)
+    payment = await create_payment(
+        consultation_id=consultation_id,
+        provider="paystack",
+        amount_ngn=amount_ngn,
+        payment_method="bank_transfer" if amount_ngn > 1000000 else "card"
+    )
+    
+    await log_event(
+        user["id"], 
+        "payment.success_fee_invoice", 
+        "consultation", 
+        str(consultation_id), 
+        f"Generated success fee invoice for ₦{amount_ngn:,} (based on ₦{payload.recovered_amount_ngn:,} recovery)"
+    )
+    
+    return PaymentResponse(
+        payment_id=payment["id"],
+        consultation_id=payment["consultation_id"],
+        reference=payment["reference"],
+        provider=payment["provider"],
+        amount_ngn=payment["amount_ngn"],
+        vat_amount_ngn=payment["vat_amount_ngn"],
+        total_plus_vat_ngn=payment["total_plus_vat_ngn"],
+        status=payment["status"],
+        payment_method=payment["payment_method"],
+        created_on=payment["created_on"],
+        access_code=payment.get("access_code"),
+        authorization_url=payment.get("authorization_url"),
+    )
 

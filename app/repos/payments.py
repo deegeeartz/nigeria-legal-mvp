@@ -10,10 +10,21 @@ from app.repos.connection import (
 )
 
 
-async def create_payment(consultation_id: int, provider: str = "simulation", amount_ngn: int = 5000, access_code: str | None = None, authorization_url: str | None = None) -> dict[str, Any]:
+async def create_payment(
+    consultation_id: int, 
+    provider: str = "simulation", 
+    amount_ngn: int = 5000, 
+    access_code: str | None = None, 
+    authorization_url: str | None = None,
+    payment_method: str = "card"
+) -> dict[str, Any]:
     now = _now()
     reference = f"TREF_{int(now.timestamp())}"
     gateway_status = "initialized" if provider == "paystack" else None
+    
+    # Calculate FIRS VAT (7.5%)
+    vat_amount = int(amount_ngn * 0.075)
+    total_plus_vat = amount_ngn + vat_amount
     
     # If simulated paystack, generate mock values
     if provider == "paystack" and not access_code:
@@ -24,11 +35,16 @@ async def create_payment(consultation_id: int, provider: str = "simulation", amo
             """
             INSERT INTO payments (
                 consultation_id, reference, provider, amount_ngn, status, created_on,
-                access_code, authorization_url, gateway_status
+                access_code, authorization_url, gateway_status,
+                vat_amount_ngn, total_plus_vat_ngn, payment_method
             )
-            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
             """,
-            (consultation_id, reference, provider, amount_ngn, now, access_code, authorization_url, gateway_status),
+            (
+                consultation_id, reference, provider, amount_ngn, now, 
+                access_code, authorization_url, gateway_status,
+                vat_amount, total_plus_vat, payment_method
+            ),
         )
         await conn.commit()
         pay_id = res.lastrowid

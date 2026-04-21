@@ -4,6 +4,8 @@
 **Test Suite**: 53 passed, 0 warnings ✅  
 **Branch**: `main`
 
+> **Note — Review Accuracy**: This document was re-verified on April 21, 2026 against the live codebase after edits to `app/main.py`, `app/ranking.py`, `app/routers/system.py`, `app/services/`, `app/repos/lawyers.py`, and `app/settings.py`. Several items previously listed as gaps have since been implemented and are marked accordingly.
+
 ---
 
 ## Table of Contents
@@ -24,6 +26,9 @@
 - **PostgreSQL + Alembic** — 17 migrations, proper indexing, ACID transactions, foreign key integrity
 - **53 tests passing, 0 warnings** — auth, ranking, complaints, workflows, audit, and compliance all covered
 - **Docker-ready** — `docker-compose.yml`, `docker-compose.prod.yml`, multi-stage Dockerfiles present
+- **CORS env-configurable** — `CORS_ALLOWED_ORIGINS` loaded from environment via `app/settings.py`; no longer hardcoded to `localhost:3000`
+- **Production config validation** — `validate_runtime_configuration()` enforces `PII_SECRET_KEY`, `DATABASE_URL`, and `PAYSTACK_SECRET_KEY` in production; raises `RuntimeError` on startup if misconfigured
+- **Privacy & cookie policy endpoints** — `GET /legal/privacy-policy` and `GET /legal/cookie-consent` live in `app/routers/system.py`
 
 ### Nigerian Legal Domain Logic
 
@@ -33,6 +38,11 @@
 - **Legal system filter** — `common_law`, `sharia`, `customary` correctly reflects Nigeria's pluralistic legal systems
 - **Complaint severity model** — `minor / major / severe` mirrors the NBA disciplinary process; `severe_flag` triggers ranking penalty
 - **NDPA breach SLA** — 72-hour notification deadline to NDPC per NDPA §27.2, with escalation tracking
+- **NGN currency formatting** — `price_display` property on `Lawyer` model returns `₦XX,XXX`; surfaced in all match and profile responses
+- **State bar chapter** — `bar_chapter` field on `Lawyer` model and `LawyerProfileResponse` (e.g. "Ikeja", "Lagos Island", "Port Harcourt")
+- **NBA disciplinary CSV sync** — `POST /api/admin/sync/nba-disciplinary` accepts CSV (`lawyer_id,severe_flag,active_complaints`) and bulk-updates disciplinary status via `app/services/admin_service.py`
+- **Engagement letter generator** — `app/services/document_service.py` generates a `fpdf2` PDF engagement letter on consultation booking, satisfying NBA RPC Rule 10; stored as a consultation document
+- **Court type + legal system intake filters** — `court_type` and `legal_system` fields on `IntakeRequest` propagate through `rank_lawyers` to filter the pool before scoring
 
 ### Ranking Engine
 
@@ -49,7 +59,7 @@
 - Async CPD / practice seal bonus lookup — rewards compliance-active lawyers
 - Explainable `why_recommended` reasons surfaced to clients
 
-### Compliance — NDPA Phase 1 ✅
+### Compliance — NDPA Phase 1 + Encryption ✅
 
 - `consent_events` table with lawful basis tracking
 - Full DSR workflow: access, correction, deletion, portability, restriction
@@ -57,6 +67,9 @@
 - HMAC-SHA512 Paystack webhook verification
 - Audit log with 30-day configurable retention
 - Malware scanning (EICAR + ClamAV fallback) on document uploads
+- **NIN and BVN encrypted at rest** — `encrypt_pii` / `decrypt_pii` Fernet functions in `app/repos/connection.py`; applied transparently on every `upsert_lawyer` write and `row_to_lawyer` read
+- **Practice seal encrypted** — `SEAL_ENCRYPTION_KEY` (Fernet, SHA-256 derived from `PAYSTACK_SECRET_KEY` as fallback) via `_seal_cipher()` in `app/security.py`
+- **PII key validation on startup** — `validate_runtime_configuration()` rejects fallback `PII_SECRET_KEY` in production
 
 ---
 
@@ -64,13 +77,13 @@
 
 ### Priority 1 — High Impact, Short Effort
 
-| Issue                               | Gap                                                                                             | Recommended Fix                                                       |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| **No email/SMS**                    | Booking confirmations, SLA alerts, complaint notices never sent                                 | SendGrid + Twilio + Celery/Redis                                      |
-| **Sensitive fields unencrypted**    | NIN, BVN stored as plaintext in DB                                                              | AES-256 / `cryptography.Fernet` at-rest encryption                    |
-| **Seed data dependency**            | `app/data.py` has 10 hardcoded lawyers; ranking runs against in-memory objects, not the live DB | Connect `rank_lawyers` to live `lawyers` table via `repos/lawyers.py` |
-| **CORS locked to `localhost:3000`** | Blocks any production or staging deploy                                                         | Move allowed origins to env config (`settings.py`)                    |
-| **No rate limiting on uploads**     | `/api/consultations/{id}/documents` has no per-user upload rate limit                           | Add `slowapi` limiter on the file upload endpoint                     |
+| Issue | Gap | Recommended Fix |
+|---|---|---|
+| **No email/SMS** | Booking confirmations, SLA alerts, complaint notices never sent | SendGrid + Twilio + Celery/Redis |
+| **Seed data dependency** | `app/data.py` has 10 hardcoded lawyers; ranking runs against in-memory objects, not the live DB | Connect `rank_lawyers` to live `lawyers` table via `repos/lawyers.py` |
+| **No rate limiting on uploads** | `/api/consultations/{id}/documents` has no per-user upload rate limit | Add `slowapi` limiter on the file upload endpoint |
+
+> ✅ **Already done** — CORS is now env-configurable (`CORS_ALLOWED_ORIGINS` in `settings.py`). NIN/BVN are Fernet-encrypted at rest in `repos/lawyers.py`. Both were previously listed as gaps.
 
 ### Priority 2 — Architecture
 
@@ -83,13 +96,14 @@
 
 ### Priority 3 — Nigerian Market Gaps
 
-| Issue                               | Gap                                                   | Recommended Fix                                                                    |
-| ----------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| **No NGN formatting**               | Fees stored as raw integers                           | Add `ngn_display` field in `LawyerResponse`; format as `₦45,000`                   |
-| **NBA disciplinary list is manual** | Seeded data; no sync                                  | Periodic scrape of NBA public portal or admin CSV import pipeline                  |
-| **No state bar chapter filter**     | No Ikeja / Ibadan / Port Harcourt bar differentiation | Add `bar_chapter` to lawyer profile and intake filter                              |
-| **No engagement letter generation** | NBA RPC mandates written retainer before work begins  | Weasyprint PDF generated on consultation confirmation                              |
-| **No conflict-of-interest check**   | A lawyer could advise both sides of a matter          | Check `consultations` table for opposing-party overlap before booking confirmation |
+| Issue | Gap | Recommended Fix |
+|---|---|---|
+| **No real NIN/BVN verification** | `nin_verified` / `bvn_verified` flags are still set by simulation, not a live API | Integrate Dojah or Smile Identity for live NIN/BVN lookup |
+| **NBA list sync is CSV-only** | `POST /api/admin/sync/nba-disciplinary` requires manual admin CSV upload | Add a scheduled job to auto-fetch from NBA public portal |
+| **No conflict-of-interest check** | A lawyer could advise both sides of a matter | Check `consultations` table for opposing-party overlap before booking confirmation |
+| **No FIRS VAT receipt** | Legal fees attract 7.5% VAT in Nigeria; no tax receipt on payment release | Add `vat_amount` field to `PaymentResponse`; generate PDF receipt |
+
+> ✅ **Already done** — NGN formatting (`price_display` → `₦XX,XXX`), `bar_chapter` field on lawyer profiles, NBA disciplinary CSV sync endpoint, and engagement letter PDF generation were all previously listed as gaps but are now implemented.
 
 ---
 
@@ -102,7 +116,7 @@
 | Consent Management        | ✅ Implemented                     | Need explicit opt-in modal on signup           | Medium   |
 | Purpose Limitation        | ✅ Logged in `audit_events`        | Need legal basis matrix export                 | Low      |
 | Data Minimization         | ✅ Only NIN/BVN/name collected     | Maintain quarterly review                      | Low      |
-| Security — Encryption     | ⚠️ In-transit only (HTTPS)         | Add AES-256 at-rest for sensitive fields       | **High** |
+| Security — Encryption | ✅ Fernet at-rest for NIN/BVN + practice seal | Key rotation procedure + backup needed | Medium |
 | Breach Notification       | ✅ 72-hour SLA tracked             | Need automated escalation to NDPC              | Medium   |
 | Data Subject Rights       | ✅ DSR endpoints implemented       | Need evidence attachments + redaction UI       | Medium   |
 | Data Processing Inventory | ❌ Not exported                    | Implement `/api/compliance/inventory` endpoint | Low      |
@@ -127,7 +141,7 @@
 | Control                     | Status                           | Notes                                                 |
 | --------------------------- | -------------------------------- | ----------------------------------------------------- |
 | Lawful Basis                | ✅ Consent + Legitimate Interest | Tracked in `consent_events`                           |
-| Privacy Notice              | ⚠️ Needed                        | Add `/legal/privacy-policy` endpoint                  |
+| Privacy Notice              | ✅ Implemented                   | `GET /legal/privacy-policy` live in `system.py`       |
 | Cookie Consent              | ⚠️ Validate                      | JWT in localStorage is acceptable; document rationale |
 | DPIA                        | ⚠️ Not documented                | Document for high-risk processing (payments, NIN/BVN) |
 | Data Transfer (3rd parties) | ⚠️ Paystack + Dojah SDKs         | Need DPA agreements with vendors                      |
@@ -140,7 +154,7 @@
 | Control                | Status                  | Gap                                       |
 | ---------------------- | ----------------------- | ----------------------------------------- |
 | Access Control         | ✅ RBAC + rate limiting | Need VPN/IP whitelist for admin console   |
-| Encryption             | ⚠️ TLS only             | Add AES-256 for PII at rest               |
+| Encryption             | ✅ Fernet at-rest (NIN/BVN/seal) | Key rotation + backup procedure needed    |
 | Incident Response      | ⚠️ Manual escalation    | Need automated incident response playbook |
 | Backup & Recovery      | ⚠️ Manual backups       | Need automated daily backups + DR testing |
 | Vulnerability Scanning | ❌ Not implemented      | Add SAST/DAST to CI/CD pipeline           |
@@ -154,18 +168,18 @@ These features are **not yet in the roadmap** and would meaningfully differentia
 
 ---
 
-### 4.1 Engagement Letter Generator (NBA RPC Rule 10)
+### 4.1 Engagement Letter Generator (NBA RPC Rule 10) ✅ IMPLEMENTED
 
-Auto-generate a PDF retainer agreement on consultation confirmation, pre-filled with:
+A PDF retainer agreement is auto-generated on consultation booking via `app/services/document_service.py` using `fpdf2`. It includes:
+- Parties (client name + lawyer name)
+- Scope of engagement, scheduled date, matter summary
+- Financial terms (NGN fee, platform payment clause)
+- Professional standards clause (NBA RPC, conflict-of-interest acknowledgement)
+- Signature placeholders
 
-- Lawyer name, enrollment number, and bar chapter
-- Client name and matter description
-- Agreed fee, payment terms, and scope of work
-- Governing law clause (applicable state/federal court)
+The generated PDF is stored in `storage/uploads/` and registered as a consultation document. Accessible via `GET /api/consultations/{id}/documents`.
 
-The NBA Rules of Professional Conduct (RPC) require a written retainer before substantive legal work begins. This is a compliance requirement, not a nice-to-have.
-
-**Implementation**: `weasyprint` HTML → PDF; trigger on `POST /api/consultations` confirmation.
+**Remaining gap**: The letter does not yet include the lawyer's `enrollment_number` or `bar_chapter` in the header. Both fields exist on the `Lawyer` model and should be added to the PDF template in `document_service.py`.
 
 ---
 
@@ -187,12 +201,13 @@ async def check_conflict(lawyer_id: str, client_user_id: int, matter_category: s
 
 ### 4.3 Real NIN/BVN Verification via Dojah or Smile Identity
 
-Replace the current simulated NIN flag (`nin_verified: bool`) with a live API call. Both providers support Nigerian NIN + BVN lookup:
+The NIN and BVN values are now **stored encrypted** at rest (Fernet, `encrypt_pii` in `repos/connection.py`). However, the **verification step is still simulated** — `nin_verified` is set to `True` by the admin KYC approval flow, not by a live identity API.
 
+Replace the KYC approval step with a live call to:
 - [Dojah](https://dojah.io) — Nigerian-founded, supports NIN, BVN, CAC, TIN
 - [Smile Identity](https://smileidentity.com) — pan-African, supports biometric NIN matching
 
-**Current state**: `nin_verified` is set to `True` by simulation in the KYC flow. This must be replaced before onboarding real users.
+**This is the highest-priority remaining trust gap before onboarding real users.**
 
 ---
 
@@ -254,30 +269,40 @@ This matches how Nigerian legal escrow works in practice and protects both parti
 ## 5. Recommended Implementation Order
 
 ```
+✅ Already shipped (not in scope below):
+  - CORS env config (CORS_ALLOWED_ORIGINS)
+  - NIN/BVN Fernet encryption at rest
+  - NGN formatting (price_display)
+  - bar_chapter on lawyer profiles
+  - Engagement letter PDF (fpdf2)
+  - NBA disciplinary CSV sync endpoint
+  - Privacy policy + cookie consent endpoints
+  - Production config validation on startup
+
 Phase 3 (Weeks 1–2) — Hardening
   ├── Email/SMS (SendGrid + Twilio + Celery/Redis)
-  ├── Encryption at rest (AES-256 for NIN, BVN)
-  ├── CORS moved to env config
-  ├── NGN currency formatting (₦)
-  └── Explicit consent modal on signup
+  ├── Rate limiting on document upload endpoint
+  ├── Explicit consent modal on signup (frontend)
+  └── DPO user role + compliance dashboard
 
-Phase 4 (Weeks 3–4) — Engagement & Compliance
-  ├── WebSocket real-time chat
-  ├── Engagement letter PDF generator (NBA RPC Rule 10)
-  ├── DPO user role + compliance dashboard
-  └── NDPA data processing inventory endpoint
+Phase 4 (Weeks 3–4) — Engagement & Real-time
+  ├── WebSocket real-time chat (/ws/conversations/{id})
+  ├── NDPA data processing inventory endpoint
+  ├── Conflict-of-interest check on consultation booking
+  └── Engagement letter: add enrollment_number + bar_chapter to PDF
 
 Phase 5 (Weeks 5–6) — Trust & Verification
-  ├── Real NIN/BVN via Dojah API
-  ├── NBA disciplinary list sync (CSV import or scrape)
-  ├── Conflict-of-interest engine
+  ├── Real NIN/BVN via Dojah API (highest-priority trust gap)
+  ├── Scheduled NBA disciplinary list sync (replace manual CSV)
+  ├── FIRS VAT receipt on payment release
+  ├── Milestone-gated escrow release
   └── Load testing (Locust/K6) + connection pooling
 
 Phase 6 (Weeks 7–8) — Differentiation
   ├── ADR marketplace (mediation/arbitration)
   ├── Pidgin/Yoruba localization
-  ├── FIRS VAT receipts
-  ├── Milestone-gated escrow release
+  ├── Automated daily DB backup (pg_dump script)
+  ├── SAST/DAST in CI/CD pipeline
   └── Court e-filing integration (JISC Lagos)
 ```
 
@@ -295,8 +320,8 @@ Phase 6 (Weeks 7–8) — Differentiation
 | ISO 27001 (Security)   | 3.5 / 5 | ⚠️ Encryption + backup gaps          |
 
 **Verdict**: ✅ **Pilot-ready for 1–3 real lawyers.**  
-The critical blockers before scaling to real users are encryption at rest (NIN/BVN) and email/SMS notifications.
+The critical blocker before scaling to real users is **email/SMS notifications** (SendGrid + Twilio). NIN/BVN encryption is already in place. Real NIN/BVN verification (Dojah) is the next trust-layer priority.
 
 ---
 
-_Last updated: April 21, 2026 | Test suite: 53 passed, 0 warnings_
+*Last updated: April 21, 2026 (re-verified) | Test suite: 53 passed, 0 warnings*

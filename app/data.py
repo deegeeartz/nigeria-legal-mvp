@@ -23,6 +23,7 @@ SEED_LAWYERS = [
         active_complaints=0,
         court_admissions=["state_high_court", "national_industrial"],
         legal_system="common_law",
+        pro_bono_practice_areas=["employment"],
     ),
     Lawyer(
         id="lw_002",
@@ -44,6 +45,7 @@ SEED_LAWYERS = [
         is_san=True,
         court_admissions=["federal_high_court", "state_high_court", "court_of_appeal", "sharia"],
         legal_system="common_law",
+        pro_bono_practice_areas=["contracts"],
     ),
     Lawyer(
         id="lw_003",
@@ -64,6 +66,7 @@ SEED_LAWYERS = [
         active_complaints=0,
         court_admissions=["state_high_court", "customary"],
         legal_system="common_law",
+        pro_bono_practice_areas=["family"],
     ),
     Lawyer(
         id="lw_004",

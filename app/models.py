@@ -46,6 +46,13 @@ class LegalSystem(str, Enum):
     customary = "customary"
 
 
+class PaymentMethod(str, Enum):
+    card = "card"
+    virtual_account = "virtual_account"
+    bank_transfer = "bank_transfer"
+    offline_teller = "offline_teller"
+
+
 @dataclass
 class Lawyer:
     id: str
@@ -77,6 +84,7 @@ class Lawyer:
     legal_system: str = "common_law"  # common_law | sharia | customary
     bvn: str | None = None
     bar_chapter: str | None = None  # e.g. "Ikeja", "Lagos Island", "Port Harcourt"
+    pro_bono_practice_areas: List[str] | None = None  # Targeted categories for free service
 
     @property
     def price_display(self) -> str:
@@ -92,6 +100,7 @@ class IntakeRequest(BaseModel):
     legal_terms_mode: bool = False
     court_type: str | None = Field(default=None, description="Filter by court type (e.g. 'sharia', 'federal_high_court')")
     legal_system: str | None = Field(default=None, description="Filter by legal system: common_law, sharia, customary")
+    pro_bono_only: bool = False
 
 
 class MatchReason(BaseModel):
@@ -125,6 +134,7 @@ class LawyerProfileResponse(BaseModel):
     state: str
     bar_chapter: str | None = None
     practice_areas: List[str]
+    pro_bono_practice_areas: List[str] | None = None
     verification: dict
     stats: dict
     disclaimer: str
@@ -288,10 +298,17 @@ class ConsultationCreateRequest(BaseModel):
     scheduled_for: str = Field(min_length=10, max_length=80)
     summary: str = Field(min_length=10, max_length=2000)
     opposing_party_name: Optional[str] = Field(default=None, max_length=100)
+    is_contingency: bool = False
+    contingency_percentage: Optional[float] = Field(default=None, ge=0, le=100)
 
 
 class ConsultationStatusUpdateRequest(BaseModel):
     status: ConsultationStatus
+
+
+class SuccessFeeRequest(BaseModel):
+    recovered_amount_ngn: int = Field(ge=0)
+    proof_document_id: Optional[int] = None
 
 
 class ConsultationResponse(BaseModel):
@@ -303,6 +320,8 @@ class ConsultationResponse(BaseModel):
     status: ConsultationStatus
     created_on: datetime
     opposing_party_name: Optional[str] = None
+    is_contingency: bool = False
+    contingency_percentage: Optional[float] = None
 
 
 class PaymentCreateRequest(BaseModel):
@@ -320,7 +339,10 @@ class PaymentResponse(BaseModel):
     reference: str
     provider: str
     amount_ngn: int
+    vat_amount_ngn: int = 0
+    total_plus_vat_ngn: int = 0
     status: PaymentStatus
+    payment_method: PaymentMethod = PaymentMethod.card
     created_on: datetime
     access_code: str | None = None
     authorization_url: str | None = None

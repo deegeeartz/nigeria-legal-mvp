@@ -57,6 +57,8 @@ def row_to_lawyer(row: Any) -> Lawyer:
         court_admissions=court_admissions,
         legal_system=_safe_get(row, "legal_system", "common_law"),
         bvn=decrypt_pii(_safe_get(row, "bvn")),
+        bar_chapter=_safe_get(row, "bar_chapter"),
+        pro_bono_practice_areas=_deserialize_practice_areas(_safe_get(row, "pro_bono_practice_areas", "")) or None,
     )
 
 
@@ -75,8 +77,9 @@ async def seed_lawyers_if_empty() -> None:
                     id, full_name, state, practice_areas, years_called, nin_verified, nba_verified,
                     bvn_verified, profile_completeness, completed_matters, rating, response_rate,
                     avg_response_hours, repeat_client_rate, base_consult_fee_ngn, active_complaints, severe_flag,
-                    enrollment_number, verification_document_id, is_san, court_admissions, legal_system, bvn, nin
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    enrollment_number, verification_document_id, is_san, court_admissions, legal_system, bvn, nin,
+                    pro_bono_practice_areas
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     lawyer.id,
@@ -103,6 +106,7 @@ async def seed_lawyers_if_empty() -> None:
                     lawyer.legal_system,
                     encrypt_pii(lawyer.bvn),
                     encrypt_pii(lawyer.nin),
+                    _serialize_practice_areas(lawyer.pro_bono_practice_areas) if lawyer.pro_bono_practice_areas else "",
                 ),
             )
         await conn.commit()
@@ -150,7 +154,8 @@ async def save_lawyer(lawyer: Lawyer) -> None:
                 is_san = ?,
                 court_admissions = ?,
                 legal_system = ?,
-                bvn = ?
+                bvn = ?,
+                pro_bono_practice_areas = ?
             WHERE id = ?
             """,
             (
@@ -178,6 +183,7 @@ async def save_lawyer(lawyer: Lawyer) -> None:
                 _serialize_practice_areas(lawyer.court_admissions) if lawyer.court_admissions else "",
                 lawyer.legal_system,
                 encrypt_pii(lawyer.bvn),
+                _serialize_practice_areas(lawyer.pro_bono_practice_areas) if lawyer.pro_bono_practice_areas else "",
                 lawyer.id,
             ),
         )

@@ -180,10 +180,16 @@ async def rank_lawyers(intake: IntakeRequest, lawyers: List[Lawyer], top_n: int 
         ]
 
     # Filter by legal system if requested
-    if intake.legal_system:
         pool = [
             lawyer for lawyer in pool
             if lawyer.legal_system == intake.legal_system
+        ]
+
+    # Filter by Pro Bono if requested
+    if intake.pro_bono_only:
+        pool = [
+            lawyer for lawyer in pool
+            if lawyer.pro_bono_practice_areas and category in lawyer.pro_bono_practice_areas
         ]
 
     scored = []
@@ -231,6 +237,10 @@ async def rank_lawyers(intake: IntakeRequest, lawyers: List[Lawyer], top_n: int 
         if lawyer.is_san:
             badges.append("Senior Advocate of Nigeria")
         
+        is_pro_bono_match = intake.pro_bono_only and lawyer.pro_bono_practice_areas and category in lawyer.pro_bono_practice_areas
+        if is_pro_bono_match:
+            badges.append("Pro Bono (Free)")
+        
         # Add seal badge if lawyer is CPD-compliant
         seal = await get_latest_practice_seal(lawyer.id)
         if seal and seal.get("cpd_compliant"):
@@ -244,8 +254,8 @@ async def rank_lawyers(intake: IntakeRequest, lawyers: List[Lawyer], top_n: int 
                 "state": lawyer.state,
                 "tier": tier,
                 "score": total,
-                "price_ngn": lawyer.base_consult_fee_ngn,
-                "price_display": lawyer.price_display,
+                "price_ngn": 0 if is_pro_bono_match else lawyer.base_consult_fee_ngn,
+                "price_display": "Pro Bono (Free)" if is_pro_bono_match else lawyer.price_display,
                 "why_recommended": _build_reasons(lawyer, category, total),
                 "badges": badges,
             }
