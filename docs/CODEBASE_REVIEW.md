@@ -64,32 +64,32 @@
 
 ### Priority 1 — High Impact, Short Effort
 
-| Issue | Gap | Recommended Fix |
-|---|---|---|
-| **No email/SMS** | Booking confirmations, SLA alerts, complaint notices never sent | SendGrid + Twilio + Celery/Redis |
-| **Sensitive fields unencrypted** | NIN, BVN stored as plaintext in DB | AES-256 / `cryptography.Fernet` at-rest encryption |
-| **Seed data dependency** | `app/data.py` has 10 hardcoded lawyers; ranking runs against in-memory objects, not the live DB | Connect `rank_lawyers` to live `lawyers` table via `repos/lawyers.py` |
-| **CORS locked to `localhost:3000`** | Blocks any production or staging deploy | Move allowed origins to env config (`settings.py`) |
-| **No rate limiting on uploads** | `/api/consultations/{id}/documents` has no per-user upload rate limit | Add `slowapi` limiter on the file upload endpoint |
+| Issue                               | Gap                                                                                             | Recommended Fix                                                       |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| **No email/SMS**                    | Booking confirmations, SLA alerts, complaint notices never sent                                 | SendGrid + Twilio + Celery/Redis                                      |
+| **Sensitive fields unencrypted**    | NIN, BVN stored as plaintext in DB                                                              | AES-256 / `cryptography.Fernet` at-rest encryption                    |
+| **Seed data dependency**            | `app/data.py` has 10 hardcoded lawyers; ranking runs against in-memory objects, not the live DB | Connect `rank_lawyers` to live `lawyers` table via `repos/lawyers.py` |
+| **CORS locked to `localhost:3000`** | Blocks any production or staging deploy                                                         | Move allowed origins to env config (`settings.py`)                    |
+| **No rate limiting on uploads**     | `/api/consultations/{id}/documents` has no per-user upload rate limit                           | Add `slowapi` limiter on the file upload endpoint                     |
 
 ### Priority 2 — Architecture
 
-| Issue | Gap | Recommended Fix |
-|---|---|---|
-| **No WebSocket chat** | Messaging is polling-only; feels slow | `@app.websocket("/ws/conversations/{id}")` with connection manager |
-| **No task queue** | Emails, PDF generation, and breach escalations would block the request thread | Celery + Redis |
-| **No observability** | No APM, no distributed tracing, no structured metrics beyond request logs | OpenTelemetry → Jaeger or Datadog |
+| Issue                                     | Gap                                                                                | Recommended Fix                                                                              |
+| ----------------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| **No WebSocket chat**                     | Messaging is polling-only; feels slow                                              | `@app.websocket("/ws/conversations/{id}")` with connection manager                           |
+| **No task queue**                         | Emails, PDF generation, and breach escalations would block the request thread      | Celery + Redis                                                                               |
+| **No observability**                      | No APM, no distributed tracing, no structured metrics beyond request logs          | OpenTelemetry → Jaeger or Datadog                                                            |
 | **Intake classification is keyword-only** | `classify_intake` uses basic string matching — will mis-classify ambiguous queries | Fine-tune with an LLM or at minimum a TF-IDF classifier trained on Nigerian legal categories |
 
 ### Priority 3 — Nigerian Market Gaps
 
-| Issue | Gap | Recommended Fix |
-|---|---|---|
-| **No NGN formatting** | Fees stored as raw integers | Add `ngn_display` field in `LawyerResponse`; format as `₦45,000` |
-| **NBA disciplinary list is manual** | Seeded data; no sync | Periodic scrape of NBA public portal or admin CSV import pipeline |
-| **No state bar chapter filter** | No Ikeja / Ibadan / Port Harcourt bar differentiation | Add `bar_chapter` to lawyer profile and intake filter |
-| **No engagement letter generation** | NBA RPC mandates written retainer before work begins | Weasyprint PDF generated on consultation confirmation |
-| **No conflict-of-interest check** | A lawyer could advise both sides of a matter | Check `consultations` table for opposing-party overlap before booking confirmation |
+| Issue                               | Gap                                                   | Recommended Fix                                                                    |
+| ----------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| **No NGN formatting**               | Fees stored as raw integers                           | Add `ngn_display` field in `LawyerResponse`; format as `₦45,000`                   |
+| **NBA disciplinary list is manual** | Seeded data; no sync                                  | Periodic scrape of NBA public portal or admin CSV import pipeline                  |
+| **No state bar chapter filter**     | No Ikeja / Ibadan / Port Harcourt bar differentiation | Add `bar_chapter` to lawyer profile and intake filter                              |
+| **No engagement letter generation** | NBA RPC mandates written retainer before work begins  | Weasyprint PDF generated on consultation confirmation                              |
+| **No conflict-of-interest check**   | A lawyer could advise both sides of a matter          | Check `consultations` table for opposing-party overlap before booking confirmation |
 
 ---
 
@@ -97,17 +97,17 @@
 
 ### NDPA (Nigeria Data Protection Act) — 85% ✅
 
-| Control | Status | Gap | Priority |
-|---|---|---|---|
-| Consent Management | ✅ Implemented | Need explicit opt-in modal on signup | Medium |
-| Purpose Limitation | ✅ Logged in `audit_events` | Need legal basis matrix export | Low |
-| Data Minimization | ✅ Only NIN/BVN/name collected | Maintain quarterly review | Low |
-| Security — Encryption | ⚠️ In-transit only (HTTPS) | Add AES-256 at-rest for sensitive fields | **High** |
-| Breach Notification | ✅ 72-hour SLA tracked | Need automated escalation to NDPC | Medium |
-| Data Subject Rights | ✅ DSR endpoints implemented | Need evidence attachments + redaction UI | Medium |
-| Data Processing Inventory | ❌ Not exported | Implement `/api/compliance/inventory` endpoint | Low |
-| DPO Role | ⚠️ Admin handles DPO duties | Need dedicated DPO user role + dashboard | Medium |
-| Retention Policy | ✅ Configurable (default 180 days) | Need quarterly review process | Low |
+| Control                   | Status                             | Gap                                            | Priority |
+| ------------------------- | ---------------------------------- | ---------------------------------------------- | -------- |
+| Consent Management        | ✅ Implemented                     | Need explicit opt-in modal on signup           | Medium   |
+| Purpose Limitation        | ✅ Logged in `audit_events`        | Need legal basis matrix export                 | Low      |
+| Data Minimization         | ✅ Only NIN/BVN/name collected     | Maintain quarterly review                      | Low      |
+| Security — Encryption     | ⚠️ In-transit only (HTTPS)         | Add AES-256 at-rest for sensitive fields       | **High** |
+| Breach Notification       | ✅ 72-hour SLA tracked             | Need automated escalation to NDPC              | Medium   |
+| Data Subject Rights       | ✅ DSR endpoints implemented       | Need evidence attachments + redaction UI       | Medium   |
+| Data Processing Inventory | ❌ Not exported                    | Implement `/api/compliance/inventory` endpoint | Low      |
+| DPO Role                  | ⚠️ Admin handles DPO duties        | Need dedicated DPO user role + dashboard       | Medium   |
+| Retention Policy          | ✅ Configurable (default 180 days) | Need quarterly review process                  | Low      |
 
 > **Target**: 95% NDPA compliance by end of Q2 2026 (encryption + DPO dashboard + consent modal)
 
@@ -124,27 +124,27 @@
 
 ### GDPR Alignment (for EU/UK clients) — 90% ✅
 
-| Control | Status | Notes |
-|---|---|---|
-| Lawful Basis | ✅ Consent + Legitimate Interest | Tracked in `consent_events` |
-| Privacy Notice | ⚠️ Needed | Add `/legal/privacy-policy` endpoint |
-| Cookie Consent | ⚠️ Validate | JWT in localStorage is acceptable; document rationale |
-| DPIA | ⚠️ Not documented | Document for high-risk processing (payments, NIN/BVN) |
-| Data Transfer (3rd parties) | ⚠️ Paystack + Dojah SDKs | Need DPA agreements with vendors |
-| Right to be Forgotten | ✅ DSR deletion implemented | Good |
+| Control                     | Status                           | Notes                                                 |
+| --------------------------- | -------------------------------- | ----------------------------------------------------- |
+| Lawful Basis                | ✅ Consent + Legitimate Interest | Tracked in `consent_events`                           |
+| Privacy Notice              | ⚠️ Needed                        | Add `/legal/privacy-policy` endpoint                  |
+| Cookie Consent              | ⚠️ Validate                      | JWT in localStorage is acceptable; document rationale |
+| DPIA                        | ⚠️ Not documented                | Document for high-risk processing (payments, NIN/BVN) |
+| Data Transfer (3rd parties) | ⚠️ Paystack + Dojah SDKs         | Need DPA agreements with vendors                      |
+| Right to be Forgotten       | ✅ DSR deletion implemented      | Good                                                  |
 
 ---
 
 ### ISO 27001 (Information Security) — ~70% ⚠️
 
-| Control | Status | Gap |
-|---|---|---|
-| Access Control | ✅ RBAC + rate limiting | Need VPN/IP whitelist for admin console |
-| Encryption | ⚠️ TLS only | Add AES-256 for PII at rest |
-| Incident Response | ⚠️ Manual escalation | Need automated incident response playbook |
-| Backup & Recovery | ⚠️ Manual backups | Need automated daily backups + DR testing |
-| Vulnerability Scanning | ❌ Not implemented | Add SAST/DAST to CI/CD pipeline |
-| Change Management | ⚠️ Git-based | Formalize change approval process |
+| Control                | Status                  | Gap                                       |
+| ---------------------- | ----------------------- | ----------------------------------------- |
+| Access Control         | ✅ RBAC + rate limiting | Need VPN/IP whitelist for admin console   |
+| Encryption             | ⚠️ TLS only             | Add AES-256 for PII at rest               |
+| Incident Response      | ⚠️ Manual escalation    | Need automated incident response playbook |
+| Backup & Recovery      | ⚠️ Manual backups       | Need automated daily backups + DR testing |
+| Vulnerability Scanning | ❌ Not implemented      | Add SAST/DAST to CI/CD pipeline           |
+| Change Management      | ⚠️ Git-based            | Formalize change approval process         |
 
 ---
 
@@ -157,6 +157,7 @@ These features are **not yet in the roadmap** and would meaningfully differentia
 ### 4.1 Engagement Letter Generator (NBA RPC Rule 10)
 
 Auto-generate a PDF retainer agreement on consultation confirmation, pre-filled with:
+
 - Lawyer name, enrollment number, and bar chapter
 - Client name and matter description
 - Agreed fee, payment terms, and scope of work
@@ -284,18 +285,18 @@ Phase 6 (Weeks 7–8) — Differentiation
 
 ## Summary Scorecard
 
-| Dimension | Score | Status |
-|---|---|---|
-| Technical Architecture | 4.5 / 5 | ✅ Excellent for MVP |
-| NDPA Compliance | 4 / 5 | ✅ Phase 1 complete; Phase 2 pending |
-| Nigerian Market Fit | 4 / 5 | ✅ Core requirements met |
-| User Experience | 3.5 / 5 | ⚠️ Needs real-time upgrades |
-| PCI-DSS (Payments) | 5 / 5 | ✅ 100% via Paystack |
-| ISO 27001 (Security) | 3.5 / 5 | ⚠️ Encryption + backup gaps |
+| Dimension              | Score   | Status                               |
+| ---------------------- | ------- | ------------------------------------ |
+| Technical Architecture | 4.5 / 5 | ✅ Excellent for MVP                 |
+| NDPA Compliance        | 4 / 5   | ✅ Phase 1 complete; Phase 2 pending |
+| Nigerian Market Fit    | 4 / 5   | ✅ Core requirements met             |
+| User Experience        | 3.5 / 5 | ⚠️ Needs real-time upgrades          |
+| PCI-DSS (Payments)     | 5 / 5   | ✅ 100% via Paystack                 |
+| ISO 27001 (Security)   | 3.5 / 5 | ⚠️ Encryption + backup gaps          |
 
 **Verdict**: ✅ **Pilot-ready for 1–3 real lawyers.**  
 The critical blockers before scaling to real users are encryption at rest (NIN/BVN) and email/SMS notifications.
 
 ---
 
-*Last updated: April 21, 2026 | Test suite: 53 passed, 0 warnings*
+_Last updated: April 21, 2026 | Test suite: 53 passed, 0 warnings_
