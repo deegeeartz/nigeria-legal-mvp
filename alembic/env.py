@@ -7,7 +7,6 @@ from sqlalchemy import engine_from_config, pool
 
 from app.settings import DATABASE_URL
 
-from app.models import Base # Ensure your metadata is imported if needed
 from sqlalchemy import create_engine
 
 config = context.config
@@ -15,7 +14,7 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-target_metadata = Base.metadata
+target_metadata = None
 
 
 def run_migrations_offline() -> None:
