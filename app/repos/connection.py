@@ -13,6 +13,7 @@ from pathlib import Path
 from secrets import token_hex
 import secrets
 from typing import Any
+from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 from cryptography.fernet import Fernet
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
@@ -28,9 +29,18 @@ ACCESS_TOKEN_TTL_MINUTES = int(os.getenv("ACCESS_TOKEN_TTL_MINUTES", "60"))
 REFRESH_TOKEN_TTL_DAYS = int(os.getenv("REFRESH_TOKEN_TTL_DAYS", "30"))
 PASSWORD_HASH_ITERATIONS = int(os.getenv("PASSWORD_HASH_ITERATIONS", "260000"))
 
+def _cleanup_url(url: str) -> str:
+    # psycopg (v3) doesn't like pgbouncer=true in the URL
+    parsed = urlparse(url)
+    params = dict(parse_qsl(parsed.query))
+    params.pop("pgbouncer", None)
+    new_query = urlencode(params)
+    return urlunparse(parsed._replace(query=new_query))
+
+
 # Use the same URL but with the async version of the driver
 # psycopg handles both, but SQLAlchemy needs the specific dialect
-ASYNC_DATABASE_URL = DATABASE_URL
+ASYNC_DATABASE_URL = _cleanup_url(DATABASE_URL)
 if ASYNC_DATABASE_URL.startswith("postgresql://"):
     ASYNC_DATABASE_URL = ASYNC_DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 

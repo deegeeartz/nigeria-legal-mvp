@@ -8,8 +8,17 @@ from sqlalchemy import engine_from_config, pool
 from app.settings import DATABASE_URL
 
 from sqlalchemy import create_engine
+from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 
 config = context.config
+
+def _cleanup_url(url: str) -> str:
+    # psycopg (v3) doesn't like pgbouncer=true in the URL
+    parsed = urlparse(url)
+    params = dict(parse_qsl(parsed.query))
+    params.pop("pgbouncer", None)
+    new_query = urlencode(params)
+    return urlunparse(parsed._replace(query=new_query))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -31,7 +40,7 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     # SQL Alchemy 2.x defaults to psycopg2 for postgresql://, but we use psycopg (v3)
-    url = DATABASE_URL
+    url = _cleanup_url(DATABASE_URL)
     if url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+psycopg://", 1)
 
