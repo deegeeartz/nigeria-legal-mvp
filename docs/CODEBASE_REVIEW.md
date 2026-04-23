@@ -80,11 +80,11 @@
 
 ### Priority 1 — High Impact, Short Effort
 
-| Issue | Gap | Recommended Fix |
-|---|---|---|
-| **No email/SMS** | Booking confirmations, SLA alerts, complaint notices never sent | SendGrid + Twilio + Celery/Redis |
-| **Seed data dependency** | `app/data.py` has 10 hardcoded lawyers; ranking runs against in-memory objects, not the live DB | Connect `rank_lawyers` to live `lawyers` table via `repos/lawyers.py` |
-| **No rate limiting on uploads** | `/api/consultations/{id}/documents` has no per-user upload rate limit | Add `slowapi` limiter on the file upload endpoint |
+| Issue                           | Gap                                                                                             | Recommended Fix                                                       |
+| ------------------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| **No email/SMS**                | Booking confirmations, SLA alerts, complaint notices never sent                                 | SendGrid + Twilio + Celery/Redis                                      |
+| **Seed data dependency**        | `app/data.py` has 10 hardcoded lawyers; ranking runs against in-memory objects, not the live DB | Connect `rank_lawyers` to live `lawyers` table via `repos/lawyers.py` |
+| **No rate limiting on uploads** | `/api/consultations/{id}/documents` has no per-user upload rate limit                           | Add `slowapi` limiter on the file upload endpoint                     |
 
 > ✅ **Already done** — CORS is now env-configurable (`CORS_ALLOWED_ORIGINS` in `settings.py`). NIN/BVN are Fernet-encrypted at rest in `repos/lawyers.py`. Both were previously listed as gaps.
 
@@ -99,11 +99,11 @@
 
 ### Priority 3 — Nigerian Market Gaps
 
-| Issue | Gap | Recommended Fix |
-|---|---|---|
-| **No real NIN/BVN verification** | `nin_verified` / `bvn_verified` flags are still set by simulation, not a live API | Integrate Dojah or Smile Identity for live NIN/BVN lookup |
-| **NBA list sync is CSV-only** | `POST /api/admin/sync/nba-disciplinary` requires manual admin CSV upload | Add a scheduled job to auto-fetch from NBA public portal |
-| **No milestone-gated escrow** | Payment release is independent of consultation workflow | Require consultation `status == "completed"` + at least 1 milestone before `released` transition |
+| Issue                            | Gap                                                                               | Recommended Fix                                                                                  |
+| -------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **No real NIN/BVN verification** | `nin_verified` / `bvn_verified` flags are still set by simulation, not a live API | Integrate Dojah or Smile Identity for live NIN/BVN lookup                                        |
+| **NBA list sync is CSV-only**    | `POST /api/admin/sync/nba-disciplinary` requires manual admin CSV upload          | Add a scheduled job to auto-fetch from NBA public portal                                         |
+| **No milestone-gated escrow**    | Payment release is independent of consultation workflow                           | Require consultation `status == "completed"` + at least 1 milestone before `released` transition |
 
 > ✅ **Already done** — Conflict-of-interest check (`check_conflict`), contingency fee arrangements (`is_contingency` + success fee endpoint), and VAT fields (`vat_amount_ngn`, `total_plus_vat_ngn`) were previously listed as gaps but are now implemented.
 
@@ -113,17 +113,17 @@
 
 ### NDPA (Nigeria Data Protection Act) — 85% ✅
 
-| Control                   | Status                             | Gap                                            | Priority |
-| ------------------------- | ---------------------------------- | ---------------------------------------------- | -------- |
-| Consent Management        | ✅ Implemented                     | Need explicit opt-in modal on signup           | Medium   |
-| Purpose Limitation        | ✅ Logged in `audit_events`        | Need legal basis matrix export                 | Low      |
-| Data Minimization         | ✅ Only NIN/BVN/name collected     | Maintain quarterly review                      | Low      |
-| Security — Encryption | ✅ Fernet at-rest for NIN/BVN + practice seal | Key rotation procedure + backup needed | Medium |
-| Breach Notification       | ✅ 72-hour SLA tracked             | Need automated escalation to NDPC              | Medium   |
-| Data Subject Rights       | ✅ DSR endpoints implemented       | Need evidence attachments + redaction UI       | Medium   |
-| Data Processing Inventory | ❌ Not exported                    | Implement `/api/compliance/inventory` endpoint | Low      |
-| DPO Role                  | ⚠️ Admin handles DPO duties        | Need dedicated DPO user role + dashboard       | Medium   |
-| Retention Policy          | ✅ Configurable (default 180 days) | Need quarterly review process                  | Low      |
+| Control                   | Status                                        | Gap                                            | Priority |
+| ------------------------- | --------------------------------------------- | ---------------------------------------------- | -------- |
+| Consent Management        | ✅ Implemented                                | Need explicit opt-in modal on signup           | Medium   |
+| Purpose Limitation        | ✅ Logged in `audit_events`                   | Need legal basis matrix export                 | Low      |
+| Data Minimization         | ✅ Only NIN/BVN/name collected                | Maintain quarterly review                      | Low      |
+| Security — Encryption     | ✅ Fernet at-rest for NIN/BVN + practice seal | Key rotation procedure + backup needed         | Medium   |
+| Breach Notification       | ✅ 72-hour SLA tracked                        | Need automated escalation to NDPC              | Medium   |
+| Data Subject Rights       | ✅ DSR endpoints implemented                  | Need evidence attachments + redaction UI       | Medium   |
+| Data Processing Inventory | ❌ Not exported                               | Implement `/api/compliance/inventory` endpoint | Low      |
+| DPO Role                  | ⚠️ Admin handles DPO duties                   | Need dedicated DPO user role + dashboard       | Medium   |
+| Retention Policy          | ✅ Configurable (default 180 days)            | Need quarterly review process                  | Low      |
 
 > **Target**: 95% NDPA compliance by end of Q2 2026 (encryption + DPO dashboard + consent modal)
 
@@ -153,14 +153,14 @@
 
 ### ISO 27001 (Information Security) — ~70% ⚠️
 
-| Control                | Status                  | Gap                                       |
-| ---------------------- | ----------------------- | ----------------------------------------- |
-| Access Control         | ✅ RBAC + rate limiting | Need VPN/IP whitelist for admin console   |
+| Control                | Status                           | Gap                                       |
+| ---------------------- | -------------------------------- | ----------------------------------------- |
+| Access Control         | ✅ RBAC + rate limiting          | Need VPN/IP whitelist for admin console   |
 | Encryption             | ✅ Fernet at-rest (NIN/BVN/seal) | Key rotation + backup procedure needed    |
-| Incident Response      | ⚠️ Manual escalation    | Need automated incident response playbook |
-| Backup & Recovery      | ⚠️ Manual backups       | Need automated daily backups + DR testing |
-| Vulnerability Scanning | ❌ Not implemented      | Add SAST/DAST to CI/CD pipeline           |
-| Change Management      | ⚠️ Git-based            | Formalize change approval process         |
+| Incident Response      | ⚠️ Manual escalation             | Need automated incident response playbook |
+| Backup & Recovery      | ⚠️ Manual backups                | Need automated daily backups + DR testing |
+| Vulnerability Scanning | ❌ Not implemented               | Add SAST/DAST to CI/CD pipeline           |
+| Change Management      | ⚠️ Git-based                     | Formalize change approval process         |
 
 ---
 
@@ -173,6 +173,7 @@ These features are **not yet in the roadmap** and would meaningfully differentia
 ### 4.1 Engagement Letter Generator (NBA RPC Rule 10) ✅ IMPLEMENTED
 
 A PDF retainer agreement is auto-generated on consultation booking via `app/services/document_service.py` using `fpdf2`. It includes:
+
 - Parties (client name + lawyer name)
 - Scope of engagement, scheduled date, matter summary
 - Financial terms (NGN fee, platform payment clause)
@@ -204,6 +205,7 @@ Consultations can now be created with `is_contingency: true` and a `contingency_
 The NIN and BVN values are now **stored encrypted** at rest (Fernet, `encrypt_pii` in `repos/connection.py`). However, the **verification step is still simulated** — `nin_verified` is set to `True` by the admin KYC approval flow, not by a live identity API.
 
 Replace the KYC approval step with a live call to:
+
 - [Dojah](https://dojah.io) — Nigerian-founded, supports NIN, BVN, CAC, TIN
 - [Smile Identity](https://smileidentity.com) — pan-African, supports biometric NIN matching
 
@@ -311,18 +313,18 @@ Phase 6 (Weeks 7–8) — Differentiation
 
 ## Summary Scorecard
 
-| Dimension              | Score   | Status                               |
-| ---------------------- | ------- | ------------------------------------ |
-| Technical Architecture | 4.5 / 5 | ✅ Excellent for MVP                 |
-| NDPA Compliance        | 4 / 5   | ✅ Phase 1 complete; Phase 2 pending |
+| Dimension              | Score   | Status                                                             |
+| ---------------------- | ------- | ------------------------------------------------------------------ |
+| Technical Architecture | 4.5 / 5 | ✅ Excellent for MVP                                               |
+| NDPA Compliance        | 4 / 5   | ✅ Phase 1 complete; Phase 2 pending                               |
 | Nigerian Market Fit    | 4.5 / 5 | ✅ Strong; conflict-of-interest, contingency fees, VAT implemented |
-| User Experience        | 3.5 / 5 | ⚠️ Needs real-time upgrades          |
-| PCI-DSS (Payments)     | 5 / 5   | ✅ 100% via Paystack                 |
-| ISO 27001 (Security)   | 3.5 / 5 | ⚠️ Encryption + backup gaps          |
+| User Experience        | 3.5 / 5 | ⚠️ Needs real-time upgrades                                        |
+| PCI-DSS (Payments)     | 5 / 5   | ✅ 100% via Paystack                                               |
+| ISO 27001 (Security)   | 3.5 / 5 | ⚠️ Encryption + backup gaps                                        |
 
 **Verdict**: ✅ **Pilot-ready for 1–3 real lawyers.**  
 The critical blocker before scaling to real users is **email/SMS notifications** (SendGrid + Twilio). NIN/BVN encryption is in place. Real NIN/BVN verification via Dojah is the next trust-layer priority.
 
 ---
 
-*Last updated: April 21, 2026 (re-verified ×2) | Test suite: 53 passed, 0 warnings*
+_Last updated: April 21, 2026 (re-verified ×2) | Test suite: 53 passed, 0 warnings_
