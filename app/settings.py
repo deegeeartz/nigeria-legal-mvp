@@ -66,6 +66,10 @@ if not SEAL_ENCRYPTION_KEY:
     derived_key_bytes = hashlib.sha256(PAYSTACK_SECRET_KEY.encode("utf-8")).digest()
     SEAL_ENCRYPTION_KEY = base64.urlsafe_b64encode(derived_key_bytes).decode("utf-8")
 
+# Supabase Storage (Phase 7)
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://mxncavkahdcwnkqwnegh.supabase.co").strip()
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip() # Service Role Key
+
 AUTH_RATE_LIMIT_WINDOW_SECONDS = _env_int("AUTH_RATE_LIMIT_WINDOW_SECONDS", 60)
 LOGIN_FAILURE_LIMIT = _env_int("LOGIN_FAILURE_LIMIT", 5)
 REFRESH_FAILURE_LIMIT = _env_int("REFRESH_FAILURE_LIMIT", 8)
@@ -82,6 +86,7 @@ REQUIRED_SENSITIVE_KEYS = [
     "PAYSTACK_SECRET_KEY",
     "PII_SECRET_KEY",
     "DATABASE_URL",
+    "SUPABASE_KEY",
 ]
 
 def _is_default_db_credential(database_url: str) -> bool:

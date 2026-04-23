@@ -17,7 +17,17 @@ from app.db import (
 )
 from app.settings import validate_runtime_configuration, ENVIRONMENT, _env_int, _env_bool, CORS_ALLOWED_ORIGINS
 
-from app.routers import auth, kyc, lawyers, system, messaging, consultations, payments, compliance
+from app.routers import (
+    auth,
+    kyc,
+    lawyers,
+    system,
+    messaging,
+    consultations,
+    payments,
+    compliance,
+    users,
+)
 
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -111,3 +121,4 @@ app.include_router(messaging.router)
 app.include_router(consultations.router)
 app.include_router(payments.router)
 app.include_router(compliance.router)
+app.include_router(users.router)

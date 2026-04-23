@@ -59,6 +59,7 @@ def row_to_lawyer(row: Any) -> Lawyer:
         bvn=decrypt_pii(_safe_get(row, "bvn")),
         bar_chapter=_safe_get(row, "bar_chapter"),
         pro_bono_practice_areas=_deserialize_practice_areas(_safe_get(row, "pro_bono_practice_areas", "")) or None,
+        profile_picture_url=_safe_get(row, "profile_picture_url"),
     )
 
 
@@ -78,8 +79,8 @@ async def seed_lawyers_if_empty() -> None:
                     bvn_verified, profile_completeness, completed_matters, rating, response_rate,
                     avg_response_hours, repeat_client_rate, base_consult_fee_ngn, active_complaints, severe_flag,
                     enrollment_number, verification_document_id, is_san, court_admissions, legal_system, bvn, nin,
-                    pro_bono_practice_areas
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    pro_bono_practice_areas, profile_picture_url
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     lawyer.id,
@@ -107,6 +108,7 @@ async def seed_lawyers_if_empty() -> None:
                     encrypt_pii(lawyer.bvn),
                     encrypt_pii(lawyer.nin),
                     _serialize_practice_areas(lawyer.pro_bono_practice_areas) if lawyer.pro_bono_practice_areas else "",
+                    lawyer.profile_picture_url,
                 ),
             )
         await conn.commit()
@@ -155,7 +157,8 @@ async def save_lawyer(lawyer: Lawyer) -> None:
                 court_admissions = ?,
                 legal_system = ?,
                 bvn = ?,
-                pro_bono_practice_areas = ?
+                pro_bono_practice_areas = ?,
+                profile_picture_url = ?
             WHERE id = ?
             """,
             (
@@ -184,6 +187,7 @@ async def save_lawyer(lawyer: Lawyer) -> None:
                 lawyer.legal_system,
                 encrypt_pii(lawyer.bvn),
                 _serialize_practice_areas(lawyer.pro_bono_practice_areas) if lawyer.pro_bono_practice_areas else "",
+                lawyer.profile_picture_url,
                 lawyer.id,
             ),
         )

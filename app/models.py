@@ -85,6 +85,7 @@ class Lawyer:
     bvn: str | None = None
     bar_chapter: str | None = None  # e.g. "Ikeja", "Lagos Island", "Port Harcourt"
     pro_bono_practice_areas: List[str] | None = None  # Targeted categories for free service
+    profile_picture_url: str | None = None
 
     @property
     def price_display(self) -> str:
@@ -137,6 +138,7 @@ class LawyerProfileResponse(BaseModel):
     pro_bono_practice_areas: List[str] | None = None
     verification: dict
     stats: dict
+    profile_picture_url: str | None = None
     disclaimer: str
 
 
@@ -174,6 +176,7 @@ class SignUpRequest(BaseModel):
     password: str = Field(min_length=8, max_length=120)
     full_name: str = Field(min_length=2, max_length=120)
     role: UserRole
+    phone_number: str = Field(min_length=10, max_length=20, pattern=r"^\+?[0-9\-\s]+$")
     lawyer_id: str | None = Field(default=None, min_length=3, max_length=40)
 
     @field_validator("password")
@@ -218,6 +221,9 @@ class UserProfileResponse(BaseModel):
     email: str
     full_name: str
     role: UserRole
+    phone_number: str | None = None
+    profile_picture_url: str | None = None
+    nin_verified: bool = False
     lawyer_id: str | None = None
 
 

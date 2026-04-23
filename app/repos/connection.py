@@ -249,3 +249,9 @@ def decrypt_pii(encrypted_value: str | None) -> str | None:
     except Exception:
         # Fallback for plain-text data during migration or dev
         return encrypted_value
+
+def hash_pii(value: str | None) -> str | None:
+    """Returns a deterministic SHA-256 hash of a PII value (for uniqueness checks)."""
+    if not value:
+        return None
+    return sha256(value.encode()).hexdigest()

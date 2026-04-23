@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Header, HTTPException, File, Form, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from typing import Optional
 
 from app.dependencies import (
@@ -19,7 +19,7 @@ from app.db import (
     get_document,
     user_can_access_document,
     list_documents_for_consultation,
-    get_document_file_path,
+    get_document_url,
     create_milestone,
     list_milestones,
     create_consultation_note,
@@ -323,15 +323,26 @@ async def download_document(
     document = await get_document(document_id)
     if document is None:
         raise HTTPException(status_code=404, detail="Document not found")
-    file_path = get_document_file_path(document)
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Stored document not found")
-    await log_event(user["id"], "document.downloaded", "document", str(document_id), f"Downloaded {document['original_filename']}")
-    return FileResponse(
-        path=file_path,
-        media_type=document["content_type"],
-        filename=document["original_filename"],
-    )
+    url = await get_document_url(document)
+    if url.startswith("http"):
+        return RedirectResponse(url=url)
+        
+    # Local fallback
+    if url.startswith("/api/consultations/documents/"):
+        # For local files, storage_key is the filename
+        from app.repos.connection import UPLOADS_DIR
+        file_path = UPLOADS_DIR / document["storage_key"]
+        
+        if not file_path.exists():
+             raise HTTPException(status_code=404, detail="Local file missing")
+             
+        return FileResponse(
+            path=str(file_path),
+            media_type=document["content_type"],
+            filename=document["original_filename"],
+        )
+    
+    raise HTTPException(status_code=404, detail="Document could not be retrieved")
 
 
 @router.post("/api/consultations/{consultation_id}/milestones", response_model=MilestoneResponse)

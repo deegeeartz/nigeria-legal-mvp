@@ -12,6 +12,7 @@ from app.repos.connection import (
     connect,
 )
 import app.repos.lawyers as lawyer_repo
+from app.services.supabase_storage import SupabaseStorageService
 
 
 async def upsert_kyc_status(
@@ -123,10 +124,21 @@ async def create_kyc_document(
 ) -> dict[str, Any]:
     now = _now()
     filename = f"{lawyer_id}_{int(now.timestamp())}_{original_filename}"
-    file_path = UPLOADS_DIR / filename
     
-    with open(file_path, "wb") as f:
-        f.write(file_bytes)
+    # Phase 7: Persistent Cloud Storage
+    storage_key = await SupabaseStorageService.upload_file(
+        bucket="lawyer-docs",
+        path=filename,
+        content=file_bytes,
+        content_type=content_type
+    )
+
+    # For dev fallback or if cloud upload fails, try local
+    if storage_key.startswith(("local://", "error://", "exception://")):
+        file_path = UPLOADS_DIR / filename
+        with open(file_path, "wb") as f:
+            f.write(file_bytes)
+        storage_key = filename
     
     async with connect() as conn:
         res = await conn.execute(
@@ -135,7 +147,7 @@ async def create_kyc_document(
                 lawyer_id, uploaded_by_user_id, storage_key, original_filename, content_type, size_bytes, created_on
             ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (lawyer_id, uploaded_by_user_id, filename, original_filename, content_type, len(file_bytes), now),
+            (lawyer_id, uploaded_by_user_id, storage_key, original_filename, content_type, len(file_bytes), now),
         )
         await conn.commit()
         doc_id = res.lastrowid
@@ -159,5 +171,16 @@ async def get_kyc_document(document_id: int) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
-def get_kyc_document_file_path(document: dict[str, Any]) -> str:
-    return str(UPLOADS_DIR / document["storage_key"])
+async def get_kyc_document_url(document: dict[str, Any]) -> str:
+    """
+    Returns a secure, pre-signed URL for a private KYC document.
+    """
+    key = document["storage_key"]
+    if "/" in key:
+        bucket, path = key.split("/", 1)
+        signed_url = await SupabaseStorageService.get_signed_url(bucket, path)
+        if signed_url:
+            return signed_url
+            
+    # Fallback for local files
+    return f"/api/kyc/documents/{document['id']}/download"

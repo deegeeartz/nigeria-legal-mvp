@@ -19,6 +19,9 @@ from app.repos.connection import (  # noqa: F401
     _convert_qmark_sql,
     _db_bool,
     connect,
+    encrypt_pii,
+    decrypt_pii,
+    hash_pii,
     init_db,
     _now,
     _iso,
@@ -35,12 +38,14 @@ from app.repos.auth import (  # noqa: F401
     seed_users_if_empty,
     authenticate_user,
     create_session_for_user,
-    get_user_by_access_token,
+    get_user_by_id,
+    save_user,
+    get_user_by_nin,
     refresh_session,
     revoke_session,
-    force_expire_access_token_for_tests,
     get_lawyer_user_ids,
-    get_user_by_id,
+    get_user_by_access_token,
+    force_expire_access_token_for_tests,
 )
 from app.repos.lawyers import (  # noqa: F401
     row_to_lawyer,
@@ -60,7 +65,7 @@ from app.repos.kyc import (  # noqa: F401
     list_pending_kyc_submissions,
     create_kyc_document,
     get_kyc_document,
-    get_kyc_document_file_path,
+    get_kyc_document_url,
 )
 from app.repos.conversations import (  # noqa: F401
     create_conversation,
@@ -131,7 +136,7 @@ from app.repos.documents import (  # noqa: F401
     create_document,
     list_documents_for_consultation,
     get_document,
-    get_document_file_path,
+    get_document_url,
     user_can_access_document,
 )
 

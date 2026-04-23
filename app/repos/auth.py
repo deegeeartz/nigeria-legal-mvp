@@ -26,13 +26,11 @@ async def create_user(
     password: str,
     full_name: str,
     role: str,
+    phone_number: str | None = None,
     lawyer_id: str | None = None,
 ) -> dict[str, Any] | None:
     if role != "lawyer":
         lawyer_id = None
-    # Note: get_lawyer should be imported or moved to a shared repo if needed, 
-    # but for now we'll assume it's handled or we'll fetch it here.
-    # To avoid circular imports, we might need a common fetcher.
 
     try:
         async with connect() as conn:
@@ -44,16 +42,17 @@ async def create_user(
 
             await conn.execute(
                 """
-                INSERT INTO users (email, password_hash, full_name, role, lawyer_id, created_on)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO users (email, password_hash, full_name, role, lawyer_id, phone_number, created_on)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (email.lower(), _hash_password(password), full_name, role, lawyer_id, _now()),
+                (email.lower(), _hash_password(password), full_name, role, lawyer_id, phone_number, _now()),
             )
             await conn.commit()
             res = await conn.execute("SELECT * FROM users WHERE email = ?", (email.lower(),))
             row = res.fetchone()
         return dict(row) if row else None
     except SQLAlchemyIntegrityError:
+        # This catches unique constraint violations on email or phone_number
         return None
 
 
@@ -177,6 +176,29 @@ async def force_expire_access_token_for_tests(access_token: str) -> None:
         await conn.execute("UPDATE sessions SET access_expires_at = ? WHERE access_token = ?", (past, access_token))
         await conn.commit()
 
+
+async def save_user(user_id: int, full_name: str, phone_number: str | None, profile_picture_url: str | None, nin_verified: bool, nin_encrypted: str | None, nin_hash: str | None) -> None:
+    async with connect() as conn:
+        await conn.execute(
+            """
+            UPDATE users SET
+                full_name = ?,
+                phone_number = ?,
+                profile_picture_url = ?,
+                nin_verified = ?,
+                nin_encrypted = ?,
+                nin_hash = ?
+            WHERE id = ?
+            """,
+            (full_name, phone_number, profile_picture_url, _db_bool(nin_verified), nin_encrypted, nin_hash, user_id),
+        )
+        await conn.commit()
+
+async def get_user_by_nin(nin_hash: str) -> dict[str, Any] | None:
+    async with connect() as conn:
+        res = await conn.execute("SELECT * FROM users WHERE nin_hash = ?", (nin_hash,))
+        row = res.fetchone()
+    return dict(row) if row else None
 
 async def get_lawyer_user_ids(lawyer_id: str) -> list[int]:
     async with connect() as conn:

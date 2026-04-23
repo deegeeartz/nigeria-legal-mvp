@@ -10,6 +10,7 @@ from app.repos.connection import (
     _now,
     connect,
 )
+from app.services.supabase_storage import SupabaseStorageService
 
 
 async def create_document(
@@ -22,10 +23,23 @@ async def create_document(
 ) -> dict[str, Any]:
     now = _now()
     storage_key = f"DOC_{consultation_id}_{int(now.timestamp())}_{original_filename}"
-    file_path = UPLOADS_DIR / storage_key
     
-    with open(file_path, "wb") as f:
-        f.write(file_bytes)
+    # Phase 7: Persistent Cloud Storage
+    cloud_key = await SupabaseStorageService.upload_file(
+        bucket="legal-documents",
+        path=storage_key,
+        content=file_bytes,
+        content_type=content_type
+    )
+
+    # For dev fallback or if cloud upload fails, try local
+    if cloud_key.startswith(("local://", "error://", "exception://")):
+        file_path = UPLOADS_DIR / storage_key
+        with open(file_path, "wb") as f:
+            f.write(file_bytes)
+    else:
+        # storage_key should be the full bucket path if uploaded to cloud
+        storage_key = cloud_key
         
     async with connect() as conn:
         res = await conn.execute(
@@ -70,9 +84,19 @@ async def get_document(document_id: int) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
-def get_document_file_path(document: dict[str, Any]):
-    key = document.get("storage_key") or document.get("filename")
-    return UPLOADS_DIR / key
+async def get_document_url(document: dict[str, Any]) -> str:
+    """
+    Returns a secure, pre-signed URL for a private consultation document.
+    """
+    key = document["storage_key"]
+    if "/" in key:
+        bucket, path = key.split("/", 1)
+        signed_url = await SupabaseStorageService.get_signed_url(bucket, path)
+        if signed_url:
+            return signed_url
+            
+    # Fallback for local files
+    return f"/api/consultations/documents/{document['id']}/download"
 
 
 async def user_can_access_document(user: dict[str, Any], document_id: int) -> bool:
