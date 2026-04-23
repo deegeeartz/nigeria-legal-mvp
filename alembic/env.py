@@ -30,9 +30,14 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
+    # SQL Alchemy 2.x defaults to psycopg2 for postgresql://, but we use psycopg (v3)
+    url = DATABASE_URL
+    if url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+
     # Use create_engine directly to avoid ConfigParser interpolation bugs with %
     connectable = create_engine(
-        DATABASE_URL,
+        url,
         poolclass=pool.NullPool,
     )
 
