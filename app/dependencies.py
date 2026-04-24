@@ -163,6 +163,12 @@ async def require_admin(token: str | None) -> dict:
         raise HTTPException(status_code=403, detail="Admin role required")
     return user
 
+async def require_dpo_or_admin(token: str | None) -> dict:
+    user = await require_user(token)
+    if user["role"] not in {"admin", "dpo"}:
+        raise HTTPException(status_code=403, detail="Admin or DPO role required")
+    return user
+
 async def require_client(token: str | None) -> dict:
     user = await require_user(token)
     if user["role"] != "client":

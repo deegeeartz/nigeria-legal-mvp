@@ -21,7 +21,9 @@ async def create_consultation(
     opposing_party_nin: str | None = None,
     opposing_party_rc_number: str | None = None,
     is_contingency: bool = False,
-    contingency_percentage: float | None = None
+    contingency_percentage: float | None = None,
+    matter_type: str = "general",
+    adr_preferred: bool = False,
 ) -> dict[str, Any]:
     # scheduled_for comes as ISO string from API
     scheduled_dt = _parse(scheduled_for)
@@ -32,10 +34,10 @@ async def create_consultation(
             INSERT INTO consultations (
                 client_user_id, lawyer_id, scheduled_for, summary, status, created_on, 
                 opposing_party_name, opposing_party_nin, opposing_party_rc_number,
-                is_contingency, contingency_percentage
-            ) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)
+                is_contingency, contingency_percentage, matter_type, adr_preferred
+            ) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (client_user_id, lawyer_id, scheduled_dt, summary, now, opposing_party_name, opposing_party_nin, opposing_party_rc_number, _db_bool(is_contingency), contingency_percentage),
+            (client_user_id, lawyer_id, scheduled_dt, summary, now, opposing_party_name, opposing_party_nin, opposing_party_rc_number, _db_bool(is_contingency), contingency_percentage, matter_type, _db_bool(adr_preferred)),
         )
         await conn.commit()
         cons_id = res.lastrowid

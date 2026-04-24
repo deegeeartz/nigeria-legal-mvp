@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Header, HTTPException, Query, UploadFile, File
 from fastapi.responses import Response
 
-from app.dependencies import log_event, require_admin, require_user
+from app.dependencies import log_event, require_dpo_or_admin, require_user
 from app.db import (
     build_dsr_export_bundle,
     create_consent_event,
@@ -203,7 +203,7 @@ async def list_all_dsr_requests(
     limit: int = Query(default=200, ge=1, le=500),
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> list[DsrRequestResponse]:
-    await require_admin(x_auth_token)
+    await require_dpo_or_admin(x_auth_token)
     rows = await list_dsr_requests(status, limit)
     return [_to_dsr_response(item) for item in rows]
 
@@ -214,7 +214,7 @@ async def update_dsr_request(
     payload: DsrRequestStatusUpdateRequest,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> DsrRequestResponse:
-    admin_user = await require_admin(x_auth_token)
+    admin_user = await require_dpo_or_admin(x_auth_token)
     updated = await update_dsr_request_status(dsr_request_id, payload.status, payload.resolution_note, admin_user["id"])
     if updated is None:
         raise HTTPException(status_code=404, detail="DSR request not found")
@@ -227,7 +227,7 @@ async def run_retention(
     payload: RetentionRunRequest,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> RetentionRunResponse:
-    admin_user = await require_admin(x_auth_token)
+    admin_user = await require_dpo_or_admin(x_auth_token)
     result = await run_retention_job(payload.retention_days, payload.dry_run)
     await log_event(
         admin_user["id"],
@@ -244,7 +244,7 @@ async def export_dsr_request_data(
     dsr_request_id: int,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> DsrExportResponse:
-    admin_user = await require_admin(x_auth_token)
+    admin_user = await require_dpo_or_admin(x_auth_token)
     bundle = await build_dsr_export_bundle(dsr_request_id)
     if bundle is None:
         raise HTTPException(status_code=404, detail="DSR request not found")
@@ -258,7 +258,7 @@ async def execute_dsr_deletion_request(
     payload: DsrDeletionExecuteRequest,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> DsrDeletionExecuteResponse:
-    admin_user = await require_admin(x_auth_token)
+    admin_user = await require_dpo_or_admin(x_auth_token)
     try:
         result = await execute_dsr_deletion(dsr_request_id, admin_user["id"], payload.resolution_note)
     except ValueError as exc:
@@ -302,7 +302,7 @@ async def list_all_dsr_corrections(
     limit: int = Query(default=200, ge=1, le=500),
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> list[DsrCorrectionResponse]:
-    await require_admin(x_auth_token)
+    await require_dpo_or_admin(x_auth_token)
     rows = await list_dsr_corrections(status, limit)
     return [_to_correction_response(item) for item in rows]
 
@@ -313,7 +313,7 @@ async def review_correction_request(
     payload: DsrCorrectionReviewRequest,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> DsrCorrectionResponse:
-    admin_user = await require_admin(x_auth_token)
+    admin_user = await require_dpo_or_admin(x_auth_token)
     try:
         updated = await review_dsr_correction(correction_id, payload.status, payload.review_note, admin_user["id"])
     except ValueError as exc:
@@ -329,7 +329,7 @@ async def create_breach_incident_endpoint(
     payload: BreachIncidentCreateRequest,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> BreachIncidentResponse:
-    admin_user = await require_admin(x_auth_token)
+    admin_user = await require_dpo_or_admin(x_auth_token)
     created = await create_breach_incident(
         title=payload.title,
         severity=payload.severity,
@@ -351,7 +351,7 @@ async def list_breach_incidents_endpoint(
     limit: int = Query(default=200, ge=1, le=500),
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> list[BreachIncidentResponse]:
-    await require_admin(x_auth_token)
+    await require_dpo_or_admin(x_auth_token)
     rows = await list_breach_incidents(status, limit)
     return [_to_breach_response(item) for item in rows]
 
@@ -362,7 +362,7 @@ async def update_breach_incident_endpoint(
     payload: BreachIncidentUpdateRequest,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> BreachIncidentResponse:
-    admin_user = await require_admin(x_auth_token)
+    admin_user = await require_dpo_or_admin(x_auth_token)
     updated = await update_breach_incident(
         breach_incident_id=breach_incident_id,
         actor_user_id=admin_user["id"],
@@ -398,7 +398,7 @@ async def list_breach_incidents_sla_status(
             return val.isoformat()
         return val
     
-    await require_admin(x_auth_token)
+    await require_dpo_or_admin(x_auth_token)
     breaches = await list_breach_incidents_by_sla_status(sla_status=sla_status)
     return [
         BreachSlaStatusResponse(
@@ -427,7 +427,7 @@ async def escalate_breach_incident_sla(
     Admin-only operation. Sets escalation_triggered flag and logs audit event.
     Recommended when days_until_deadline <= 1 or sla_status == 'overdue'.
     """
-    admin_user = await require_admin(x_auth_token)
+    admin_user = await require_dpo_or_admin(x_auth_token)
     
     breach = await get_breach_incident(breach_incident_id)
     if breach is None:
@@ -695,7 +695,7 @@ async def admin_verify_practice_seal(
     Admin-only operation. Used to confirm BPF payment and CPD points from
     external NBA sources or manual audit. Sets verified_on and verified_by_user_id.
     """
-    admin_user = await require_admin(x_auth_token)
+    admin_user = await require_dpo_or_admin(x_auth_token)
     
     lawyer = await get_lawyer(lawyer_id)
     if lawyer is None:
@@ -742,7 +742,7 @@ async def get_seal_audit_trail(
     Admin-only endpoint for compliance auditing. Shows all actions taken on
     lawyer's seals with timestamps and actor information.
     """
-    admin_user = await require_admin(x_auth_token)
+    admin_user = await require_dpo_or_admin(x_auth_token)
     
     seal_events = await list_seal_events(lawyer_id, practice_year, limit)
     

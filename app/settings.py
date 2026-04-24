@@ -108,6 +108,11 @@ def validate_runtime_configuration() -> None:
             if not val or (key == "DATABASE_URL" and _is_default_db_credential(val)):
                 errors.append(f"MISSING_SECURE_CONFIG: {key} must be explicitly set to a production value")
 
+    if ENVIRONMENT == "production":
+        _TEST_KEY_PREFIX = "sk_test_"
+        if PAYSTACK_SECRET_KEY.startswith(_TEST_KEY_PREFIX):
+            errors.append("PAYSTACK_SECRET_KEY must be a live key (sk_live_...) in production, not a test key")
+
     if PAYSTACK_WEBHOOK_ENFORCE_SIGNATURE and not PAYSTACK_SECRET_KEY:
         errors.append("PAYSTACK_SECRET_KEY is required when PAYSTACK_WEBHOOK_ENFORCE_SIGNATURE=true")
 

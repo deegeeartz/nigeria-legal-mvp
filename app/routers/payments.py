@@ -29,7 +29,10 @@ from app.models import (
     PaystackVerifyRequest,
     PaymentActionRequest,
 )
-from app.settings import PAYSTACK_SECRET_KEY, PAYSTACK_WEBHOOK_ENFORCE_SIGNATURE
+from app.settings import PAYSTACK_SECRET_KEY, PAYSTACK_WEBHOOK_ENFORCE_SIGNATURE, ENVIRONMENT
+from app.services.high_value_payments import MonnifyService
+
+HIGH_VALUE_THRESHOLD_NGN = 1_000_000
 
 
 def _verify_paystack_signature(raw_body: bytes, signature: str | None) -> bool:
@@ -258,3 +261,53 @@ async def paystack_webhook(request: Request):
     return {"status": "accepted"}
 
 
+# ---------------------------------------------------------------------------
+# High-Value Payments — Virtual Account (Monnify/Moniepoint NIP)
+# ---------------------------------------------------------------------------
+
+@router.post("/api/payments/{payment_id}/virtual-account")
+async def generate_virtual_account(
+    payment_id: int,
+    x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
+):
+    """Generate a bank transfer Virtual Account for payments ≥ ₦1,000,000.
+
+    CBN AML/CFT guidelines require enhanced due diligence for high-value
+    transactions; routing through a dedicated virtual account satisfies
+    the traceable-transfer requirement.
+    """
+    user = await require_user(x_auth_token)
+    payment = await get_payment(payment_id)
+    if payment is None:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    if not await user_can_access_consultation(user, payment["consultation_id"]):
+        raise HTTPException(status_code=403, detail="Payment access denied")
+    if payment["total_plus_vat_ngn"] < HIGH_VALUE_THRESHOLD_NGN:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Virtual account is only available for payments ≥ ₦{HIGH_VALUE_THRESHOLD_NGN:,}. Use Paystack for smaller amounts.",
+        )
+    result = await MonnifyService.generate_virtual_account(payment_id)
+    if result.get("status") == "error":
+        raise HTTPException(status_code=502, detail=result.get("message", "Virtual account generation failed"))
+
+    await log_event(
+        user["id"],
+        "payment.virtual_account_generated",
+        "payment",
+        str(payment_id),
+        f"Virtual account {result.get('account_number')} generated for ₦{payment['total_plus_vat_ngn']:,}",
+    )
+    return result
+
+
+@router.post("/api/payments/monnify/webhook")
+async def monnify_webhook(request: Request):
+    """Accept Monnify/Moniepoint NIP transfer callbacks."""
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    await MonnifyService.verify_transfer_webhook(payload)
+    return {"status": "accepted"}

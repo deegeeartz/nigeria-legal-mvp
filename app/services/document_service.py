@@ -68,6 +68,14 @@ async def generate_engagement_letter(consultation_id: int) -> dict[str, Any] | N
     pdf.cell(0, 10, "BETWEEN:", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("helvetica", "", 10)
     pdf.multi_cell(0, 7, f"1. {client['full_name']} (hereinafter referred to as the 'Client')\nAND\n2. {lawyer['full_name']} (hereinafter referred to as the 'Legal Practitioner')")
+    pdf.ln(3)
+
+    # Lawyer credentials (NBA RPC Rule 10 mandatory fields)
+    pdf.set_font("helvetica", "I", 9)
+    enrollment = lawyer.get("enrollment_number") or getattr(lawyer, "enrollment_number", None) or "Pending Verification"
+    bar_chapter = lawyer.get("bar_chapter") or getattr(lawyer, "bar_chapter", None) or "Not specified"
+    pdf.cell(0, 7, f"NBA Enrollment No: {enrollment}    Bar Chapter: {bar_chapter}", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("helvetica", "", 10)
     pdf.ln(5)
     
     # Scope

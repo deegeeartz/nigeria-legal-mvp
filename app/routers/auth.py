@@ -90,7 +90,14 @@ def _resolve_refresh_token(
 
 @router.post("/signup", response_model=AuthResponse)
 async def signup(payload: SignUpRequest, response: Response) -> AuthResponse:
-    created = await create_user(payload.email, payload.password, payload.full_name, payload.role.value, payload.lawyer_id)
+    created = await create_user(
+        payload.email,
+        payload.password,
+        payload.full_name,
+        payload.role.value,
+        payload.phone_number,
+        payload.lawyer_id,
+    )
     if created is None:
         raise HTTPException(status_code=409, detail="User already exists or invalid lawyer_id")
 
@@ -102,6 +109,9 @@ async def signup(payload: SignUpRequest, response: Response) -> AuthResponse:
         email=created["email"],
         full_name=created["full_name"],
         role=created["role"],
+        phone_number=created.get("phone_number"),
+        profile_picture_url=created.get("profile_picture_url"),
+        nin_verified=bool(created.get("nin_verified", False)),
         lawyer_id=created.get("lawyer_id"),
         access_token=token_bundle["access_token"],
         refresh_token=token_bundle["refresh_token"],
@@ -131,6 +141,9 @@ async def login(payload: LoginRequest, response: Response) -> AuthResponse:
         email=user["email"],
         full_name=user["full_name"],
         role=user["role"],
+        phone_number=user.get("phone_number"),
+        profile_picture_url=user.get("profile_picture_url"),
+        nin_verified=bool(user.get("nin_verified", False)),
         lawyer_id=user.get("lawyer_id"),
         access_token=token_bundle["access_token"],
         refresh_token=token_bundle["refresh_token"],
@@ -171,6 +184,9 @@ async def refresh_token(
         email=user["email"],
         full_name=user["full_name"],
         role=user["role"],
+        phone_number=user.get("phone_number"),
+        profile_picture_url=user.get("profile_picture_url"),
+        nin_verified=bool(user.get("nin_verified", False)),
         lawyer_id=user.get("lawyer_id"),
         access_token=token_bundle["access_token"],
         refresh_token=token_bundle["refresh_token"],
@@ -208,5 +224,8 @@ async def me(
         email=user["email"],
         full_name=user["full_name"],
         role=user["role"],
+        phone_number=user.get("phone_number"),
+        profile_picture_url=user.get("profile_picture_url"),
+        nin_verified=bool(user.get("nin_verified", False)),
         lawyer_id=user.get("lawyer_id"),
     )

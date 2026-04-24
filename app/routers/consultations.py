@@ -71,6 +71,8 @@ async def list_consultations_endpoint(
             opposing_party_rc_number=item.get("opposing_party_rc_number"),
             is_contingency=item.get("is_contingency", False),
             contingency_percentage=item.get("contingency_percentage"),
+            matter_type=item.get("matter_type", "general"),
+            adr_preferred=bool(item.get("adr_preferred", False)),
         )
         for item in await list_consultations_for_user(user)
     ]
@@ -91,7 +93,9 @@ async def book_consultation(
         opposing_party_nin=payload.opposing_party_nin,
         opposing_party_rc_number=payload.opposing_party_rc_number,
         is_contingency=payload.is_contingency,
-        contingency_percentage=payload.contingency_percentage
+        contingency_percentage=payload.contingency_percentage,
+        matter_type=payload.matter_type.value,
+        adr_preferred=payload.adr_preferred,
     )
     if consultation is None:
         raise HTTPException(status_code=404, detail="Lawyer not found")
@@ -133,6 +137,13 @@ async def book_consultation(
         # Log but don't fail the booking if PDF generation fails
         await log_event(user["id"], "document.generation_failed", "consultation", str(consultation["id"]), f"PDF generation error: {str(e)}")
 
+    _ADR_NOTICE = (
+        "You have indicated a preference for Alternative Dispute Resolution (ADR). "
+        "Under Nigeria's Arbitration and Conciliation Act 2023 and the Lagos Multi-Door Courthouse Rules, "
+        "the platform recommends exploring mediation or arbitration before litigation. "
+        "Your assigned legal practitioner will advise on suitable ADR forums."
+    )
+
     return ConsultationResponse(
         consultation_id=consultation["id"],
         client_user_id=consultation["client_user_id"],
@@ -146,6 +157,9 @@ async def book_consultation(
         opposing_party_rc_number=consultation.get("opposing_party_rc_number"),
         is_contingency=consultation.get("is_contingency", False),
         contingency_percentage=consultation.get("contingency_percentage"),
+        matter_type=consultation.get("matter_type", "general"),
+        adr_preferred=bool(consultation.get("adr_preferred", False)),
+        adr_notice=_ADR_NOTICE if payload.adr_preferred else None,
     )
 
 
@@ -173,6 +187,8 @@ async def get_consultation_endpoint(
         opposing_party_rc_number=consultation.get("opposing_party_rc_number"),
         is_contingency=consultation.get("is_contingency", False),
         contingency_percentage=consultation.get("contingency_percentage"),
+        matter_type=consultation.get("matter_type", "general"),
+        adr_preferred=bool(consultation.get("adr_preferred", False)),
     )
 
 
@@ -228,6 +244,8 @@ async def update_consultation_status_endpoint(
         opposing_party_rc_number=updated.get("opposing_party_rc_number"),
         is_contingency=updated.get("is_contingency", False),
         contingency_percentage=updated.get("contingency_percentage"),
+        matter_type=updated.get("matter_type", "general"),
+        adr_preferred=bool(updated.get("adr_preferred", False)),
     )
 
 
