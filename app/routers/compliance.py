@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Header, HTTPException, Query, UploadFile, File
 from fastapi.responses import Response
 
-from app.dependencies import log_event, require_dpo_or_admin, require_user
+from app.dependencies import log_event, require_admin, require_dpo_or_admin, require_user
 from app.db import (
     build_dsr_export_bundle,
     create_consent_event,

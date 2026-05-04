@@ -1,0 +1,87 @@
+{
+  "project": "Nigeria Legal Marketplace",
+  "status": "in_progress",
+  "last_updated": "2026-05-04T12:30:00Z",
+  "phases": [
+    {
+      "id": 1,
+      "name": "Critical Bug Fixes & AuthResponse Update",
+      "status": "completed",
+      "tasks": [
+        {"name": "Remove hardcoded Paystack test keys", "status": "completed"},
+        {"name": "Add require_admin import to compliance.py", "status": "completed"},
+        {"name": "Update AuthResponse model", "status": "completed"},
+        {"name": "Add length validation to opposing party fields", "status": "completed"},
+        {"name": "Fix ranking.py indentation bug", "status": "completed"},
+        {"name": "Parameterize document uploaded_by_user_id", "status": "completed"}
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Token Security",
+      "status": "completed",
+      "tasks": [
+        {"name": "Refactor backend to set httpOnly cookies", "status": "completed"},
+        {"name": "Implement CSRF protection", "status": "completed"},
+        {"name": "Update frontend auth.js to use cookies", "status": "completed"}
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Admin Dashboard",
+      "status": "completed",
+      "tasks": [
+        {"name": "Add permissions column migration", "status": "completed"},
+        {"name": "Implement require_permission dependency", "status": "completed"},
+        {"name": "Create unified Next.js admin layout and page", "status": "completed"}
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Real NIN Integration",
+      "status": "skipped",
+      "tasks": [
+        {"name": "Create identity_provider.py adapter", "status": "skipped"},
+        {"name": "Refactor kyc.py to use adapter", "status": "skipped"}
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Pagination",
+      "status": "completed",
+      "tasks": [
+        {"name": "Implement offset/limit on list endpoints", "status": "completed"}
+      ]
+    },
+    {
+      "id": 6,
+      "name": "Background Jobs & Email Notifications",
+      "status": "completed",
+      "tasks": [
+        {"name": "Implement task queue worker", "status": "completed"},
+        {"name": "Scaffold email_service.py", "status": "completed"},
+        {"name": "Route notifications through background jobs", "status": "completed"}
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Client Reviews",
+      "status": "pending",
+      "tasks": [
+        {"name": "Create lawyer_reviews migration", "status": "pending"},
+        {"name": "Implement reviews.py router", "status": "pending"},
+        {"name": "Update ranking.py to compute dynamic rating", "status": "pending"}
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Video Consultation",
+      "status": "pending",
+      "tasks": [
+        {"name": "Create video_provider.py", "status": "pending"},
+        {"name": "Update consultations router for video links", "status": "pending"},
+        {"name": "Build frontend Join Video Call UI", "status": "pending"}
+      ]
+    }
+  ]
+}

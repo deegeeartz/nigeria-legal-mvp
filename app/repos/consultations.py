@@ -53,19 +53,22 @@ async def get_consultation(consultation_id: int) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
-async def list_consultations_for_user(user: dict[str, Any]) -> list[dict[str, Any]]:
+async def list_consultations_for_user(user: dict[str, Any], limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
     async with connect() as conn:
         if user["role"] == "admin":
-            res = await conn.execute("SELECT * FROM consultations ORDER BY scheduled_for DESC")
+            res = await conn.execute(
+                "SELECT * FROM consultations ORDER BY scheduled_for DESC LIMIT ? OFFSET ?",
+                (limit, offset)
+            )
         elif user["role"] == "lawyer":
             res = await conn.execute(
-                "SELECT * FROM consultations WHERE lawyer_id = ? ORDER BY scheduled_for DESC",
-                (user["lawyer_id"],),
+                "SELECT * FROM consultations WHERE lawyer_id = ? ORDER BY scheduled_for DESC LIMIT ? OFFSET ?",
+                (user["lawyer_id"], limit, offset),
             )
         else:
             res = await conn.execute(
-                "SELECT * FROM consultations WHERE client_user_id = ? ORDER BY scheduled_for DESC",
-                (user["id"],),
+                "SELECT * FROM consultations WHERE client_user_id = ? ORDER BY scheduled_for DESC LIMIT ? OFFSET ?",
+                (user["id"], limit, offset),
             )
         rows = res.fetchall()
     return [dict(row) for row in rows]

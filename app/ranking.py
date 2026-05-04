@@ -180,6 +180,7 @@ async def rank_lawyers(intake: IntakeRequest, lawyers: List[Lawyer], top_n: int 
         ]
 
     # Filter by legal system if requested
+    if intake.legal_system:
         pool = [
             lawyer for lawyer in pool
             if lawyer.legal_system == intake.legal_system

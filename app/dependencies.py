@@ -163,6 +163,22 @@ async def require_admin(token: str | None) -> dict:
         raise HTTPException(status_code=403, detail="Admin role required")
     return user
 
+async def require_permission(token: str | None, permission: str) -> dict:
+    import json
+    user = await require_user(token)
+    perms = user.get("permissions")
+    if isinstance(perms, str):
+        try:
+            perms = json.loads(perms)
+        except:
+            perms = []
+    if not isinstance(perms, list):
+        perms = []
+        
+    if user["role"] == "admin" or permission in perms:
+        return user
+    raise HTTPException(status_code=403, detail=f"Missing required permission: {permission}")
+
 async def require_dpo_or_admin(token: str | None) -> dict:
     user = await require_user(token)
     if user["role"] not in {"admin", "dpo"}:

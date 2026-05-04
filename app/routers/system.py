@@ -93,16 +93,21 @@ async def get_tracker(x_auth_token: Optional[str] = Header(default=None, alias="
 @router.get("/api/audit-events", response_model=list[AuditEventResponse])
 async def get_audit_events(
     limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> list[AuditEventResponse]:
     await require_admin(x_auth_token)
-    return [to_audit_event_response(item) for item in await list_audit_events(limit)]
+    return [to_audit_event_response(item) for item in await list_audit_events(limit, offset)]
 
 
 @router.get("/api/notifications", response_model=list[NotificationResponse])
-async def get_notifications(x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token")) -> list[NotificationResponse]:
+async def get_notifications(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token")
+) -> list[NotificationResponse]:
     user = await require_user(x_auth_token)
-    return [to_notification_response(item) for item in await list_notifications_for_user(user["id"])]
+    return [to_notification_response(item) for item in await list_notifications_for_user(user["id"], limit=limit, offset=offset)]
 
 
 @router.post("/api/notifications/{notification_id}/read", response_model=NotificationResponse)

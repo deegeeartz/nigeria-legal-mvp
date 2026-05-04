@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Header, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Header, HTTPException, WebSocket, WebSocketDisconnect, Query
 from typing import Optional, Dict, List
 import json
 from datetime import datetime, UTC
@@ -62,10 +62,12 @@ router = APIRouter(tags=["messaging"])
 
 @router.get("/api/conversations", response_model=list[ConversationResponse])
 async def list_conversations_endpoint(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> list[ConversationResponse]:
     user = await require_user(x_auth_token)
-    conversations = await list_conversations_for_user(user)
+    conversations = await list_conversations_for_user(user, limit=limit, offset=offset)
     return [
         ConversationResponse(
             conversation_id=item["id"],
@@ -201,12 +203,14 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
 @router.get("/api/conversations/{conversation_id}/messages", response_model=list[MessageResponse])
 async def get_messages(
     conversation_id: int,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> list[MessageResponse]:
     user = await require_user(x_auth_token)
     if not await user_can_access_conversation(user, conversation_id):
         raise HTTPException(status_code=403, detail="Conversation access denied")
-    messages = await list_messages(conversation_id)
+    messages = await list_messages(conversation_id, limit=limit, offset=offset)
     return [
         MessageResponse(
             message_id=item["id"], 

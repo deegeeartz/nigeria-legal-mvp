@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Header, HTTPException, File, Form, UploadFile
+from fastapi import APIRouter, Header, HTTPException, File, Form, UploadFile, Query, BackgroundTasks
 from fastapi.responses import FileResponse, RedirectResponse
 from typing import Optional
 
@@ -40,6 +40,7 @@ from app.models import (
     PaymentResponse,
 )
 from app.services.document_service import generate_engagement_letter
+from app.services.email_service import send_consultation_booked_email
 from app.security import scan_upload_for_malware, MalwareDetectedError, MalwareScanError
 
 
@@ -54,6 +55,8 @@ def _scheduled_for_as_str(value: object) -> str:
 
 @router.get("/api/consultations", response_model=list[ConsultationResponse])
 async def list_consultations_endpoint(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> list[ConsultationResponse]:
     user = await require_user(x_auth_token)
@@ -74,13 +77,14 @@ async def list_consultations_endpoint(
             matter_type=item.get("matter_type", "general"),
             adr_preferred=bool(item.get("adr_preferred", False)),
         )
-        for item in await list_consultations_for_user(user)
+        for item in await list_consultations_for_user(user, limit=limit, offset=offset)
     ]
 
 
 @router.post("/api/consultations", response_model=ConsultationResponse)
 async def book_consultation(
     payload: ConsultationCreateRequest,
+    background_tasks: BackgroundTasks,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> ConsultationResponse:
     user = await require_client(x_auth_token)
@@ -127,6 +131,14 @@ async def book_consultation(
         body=f"Consultation scheduled for {payload.scheduled_for}",
         resource_type="consultation",
         resource_id=str(consultation["id"]),
+    )
+    
+    background_tasks.add_task(
+        send_consultation_booked_email, 
+        user["email"], 
+        user["full_name"], 
+        str(payload.lawyer_id), 
+        payload.scheduled_for.isoformat() if hasattr(payload.scheduled_for, 'isoformat') else str(payload.scheduled_for)
     )
 
     # Automatically generate Engagement Letter (NBA Requirement)

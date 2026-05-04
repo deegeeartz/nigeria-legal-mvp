@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Header, HTTPException, File, Form, UploadFile
+from fastapi import APIRouter, Header, HTTPException, File, Form, UploadFile, BackgroundTasks
 from fastapi.responses import FileResponse, RedirectResponse
 from typing import Optional
 import os
@@ -30,6 +30,7 @@ from app.models import (
     KycStatusResponse,
     KycVerifyRequest,
 )
+from app.services.email_service import send_kyc_status_email
 from app.security import scan_upload_for_malware, MalwareDetectedError, MalwareScanError
 
 MAX_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024
@@ -222,6 +223,7 @@ async def list_pending_kyc(
 @router.post("/verify", response_model=KycStatusResponse)
 async def verify_kyc(
     payload: KycVerifyRequest,
+    background_tasks: BackgroundTasks,
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> KycStatusResponse:
     admin_user = await require_admin(x_auth_token)
@@ -244,6 +246,16 @@ async def verify_kyc(
         resource_type="lawyer",
         resource_id=payload.lawyer_id,
     )
+    
+    lawyer_user_ids = await get_lawyer_user_ids(payload.lawyer_id)
+    if lawyer_user_ids:
+        lawyer_user = await get_user_by_id(lawyer_user_ids[0])
+        if lawyer_user:
+            # Determine general status
+            status_text = "Verified" if (payload.nba_verified and payload.nin_verified) else "Pending / Partially Verified"
+            if payload.nba_verified is False and payload.nin_verified is False:
+                status_text = "Rejected"
+            background_tasks.add_task(send_kyc_status_email, lawyer_user["email"], lawyer_user["full_name"], status_text, payload.note)
 
     return KycStatusResponse(**updated)
 

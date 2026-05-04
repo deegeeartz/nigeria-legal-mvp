@@ -41,9 +41,16 @@ DATABASE_URL = os.getenv("DATABASE_URL") or (
 STRICT_SECURITY_MODE = _env_bool("STRICT_SECURITY_MODE", ENVIRONMENT in {"staging", "production"})
 
 # Payment Gateway (Paystack)
-PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY", "sk_test_5e25e879849b870e3c0b88bcb9d49b975b54b654")
-PAYSTACK_PUBLIC_KEY = os.getenv("PAYSTACK_PUBLIC_KEY", "pk_test_8eee6766dfe25b3420d26ef5ad7401bac74b86e8")
+PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY", "")
+PAYSTACK_PUBLIC_KEY = os.getenv("PAYSTACK_PUBLIC_KEY", "")
 PAYSTACK_WEBHOOK_ENFORCE_SIGNATURE = _env_bool("PAYSTACK_WEBHOOK_ENFORCE_SIGNATURE", True)
+
+# Email Settings (SMTP)
+SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = _env_int("SMTP_PORT", 587)
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", "noreply@legalmvp.com.ng")
 
 # CORS Configuration
 _CORS_DEFAULT = "http://localhost:3000,http://127.0.0.1:3000"

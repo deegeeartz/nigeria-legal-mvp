@@ -85,7 +85,6 @@ class Lawyer:
     bvn: str | None = None
     bar_chapter: str | None = None  # e.g. "Ikeja", "Lagos Island", "Port Harcourt"
     pro_bono_practice_areas: List[str] | None = None  # Targeted categories for free service
-    profile_picture_url: str | None = None
 
     @property
     def price_display(self) -> str:
@@ -138,7 +137,6 @@ class LawyerProfileResponse(BaseModel):
     pro_bono_practice_areas: List[str] | None = None
     verification: dict
     stats: dict
-    profile_picture_url: str | None = None
     disclaimer: str
 
 
@@ -169,23 +167,6 @@ class UserRole(str, Enum):
     client = "client"
     lawyer = "lawyer"
     admin = "admin"
-    dpo = "dpo"  # Data Protection Officer — NDPA 2023 §32
-
-
-class MatterType(str, Enum):
-    """Classification of legal matters, including ADR pathways.
-
-    Nigeria's Arbitration and Conciliation Act (ACA) 2023 and the
-    Lagos Multi-Door Courthouse (LMDC) Rules encourage ADR-first
-    resolution before litigation.
-    """
-    general = "general"
-    litigation = "litigation"
-    arbitration = "arbitration"   # ACA 2023, ICAN accredited
-    mediation = "mediation"       # LMDC, NIM accredited
-    negotiation = "negotiation"
-    contract_review = "contract_review"
-    advisory = "advisory"
 
 
 class SignUpRequest(BaseModel):
@@ -193,7 +174,6 @@ class SignUpRequest(BaseModel):
     password: str = Field(min_length=8, max_length=120)
     full_name: str = Field(min_length=2, max_length=120)
     role: UserRole
-    phone_number: str = Field(min_length=10, max_length=20, pattern=r"^\+?[0-9\-\s]+$")
     lawyer_id: str | None = Field(default=None, min_length=3, max_length=40)
 
     @field_validator("password")
@@ -238,9 +218,6 @@ class UserProfileResponse(BaseModel):
     email: str
     full_name: str
     role: UserRole
-    phone_number: str | None = None
-    profile_picture_url: str | None = None
-    nin_verified: bool = False
     lawyer_id: str | None = None
 
 
@@ -325,12 +302,6 @@ class ConsultationCreateRequest(BaseModel):
     opposing_party_rc_number: Optional[str] = Field(default=None, max_length=20, description="CAC RC number if opposing party is a company")
     is_contingency: bool = False
     contingency_percentage: Optional[float] = Field(default=None, ge=0, le=100)
-    matter_type: MatterType = MatterType.general
-    adr_preferred: bool = Field(
-        default=False,
-        description="Client indicates preference for ADR (mediation/arbitration) before litigation. "
-                    "Per Nigeria's ACA 2023 and LMDC Rules, ADR is encouraged as first step.",
-    )
 
 
 class ConsultationStatusUpdateRequest(BaseModel):
@@ -355,9 +326,6 @@ class ConsultationResponse(BaseModel):
     opposing_party_rc_number: Optional[str] = None
     is_contingency: bool = False
     contingency_percentage: Optional[float] = None
-    matter_type: str = "general"
-    adr_preferred: bool = False
-    adr_notice: Optional[str] = None  # Populated when adr_preferred=True
 
 
 class PaymentCreateRequest(BaseModel):

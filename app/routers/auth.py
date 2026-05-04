@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Cookie, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Cookie, Header, HTTPException, Request, Response, BackgroundTasks
 from typing import Optional
 from app.dependencies import (
     log_event,
@@ -29,6 +29,7 @@ from app.models import (
     UserProfileResponse,
 )
 from app.settings import ENVIRONMENT
+from app.services.email_service import send_welcome_email
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -89,7 +90,7 @@ def _resolve_refresh_token(
 # ---------------------------------------------------------------------------
 
 @router.post("/signup", response_model=AuthResponse)
-async def signup(payload: SignUpRequest, response: Response) -> AuthResponse:
+async def signup(payload: SignUpRequest, response: Response, background_tasks: BackgroundTasks) -> AuthResponse:
     created = await create_user(
         payload.email,
         payload.password,
@@ -103,6 +104,9 @@ async def signup(payload: SignUpRequest, response: Response) -> AuthResponse:
 
     token_bundle = await create_session_for_user(created["id"])
     await log_event(created["id"], "auth.signup", "user", str(created["id"]), f"User signed up as {created['role']}")
+    
+    background_tasks.add_task(send_welcome_email, created["email"], created["full_name"], created["role"])
+    
     _set_auth_cookies(response, token_bundle)
     return AuthResponse(
         user_id=created["id"],

@@ -67,6 +67,18 @@ async def security_headers_middleware(request: Request, call_next):
     return response
 
 @app.middleware("http")
+async def token_cookie_middleware(request: Request, call_next):
+    """
+    Reads the access_token cookie and transparently injects it into the X-Auth-Token header
+    if the header is missing. This allows existing endpoints expecting the header to work with cookies.
+    """
+    if "x-auth-token" not in request.headers and "access_token" in request.cookies:
+        headers = dict(request.scope["headers"])
+        headers[b"x-auth-token"] = request.cookies["access_token"].encode()
+        request.scope["headers"] = [(k, v) for k, v in headers.items()]
+    return await call_next(request)
+
+@app.middleware("http")
 async def request_observability_middleware(request: Request, call_next):
     if not ENABLE_REQUEST_LOGGING:
         return await call_next(request)

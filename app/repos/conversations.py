@@ -52,29 +52,32 @@ async def create_message(conversation_id: int, sender_user_id: int, body: str) -
     return dict(row) if row else {}
 
 
-async def list_messages(conversation_id: int) -> list[dict[str, Any]]:
+async def list_messages(conversation_id: int, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
     async with connect() as conn:
         res = await conn.execute(
-            "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_on ASC",
-            (conversation_id,),
+            "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_on ASC LIMIT ? OFFSET ?",
+            (conversation_id, limit, offset),
         )
         rows = res.fetchall()
     return [dict(row) for row in rows]
 
 
-async def list_conversations_for_user(user: dict[str, Any]) -> list[dict[str, Any]]:
+async def list_conversations_for_user(user: dict[str, Any], limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
     async with connect() as conn:
         if user["role"] == "admin":
-            res = await conn.execute("SELECT * FROM conversations ORDER BY created_on DESC")
+            res = await conn.execute(
+                "SELECT * FROM conversations ORDER BY created_on DESC LIMIT ? OFFSET ?",
+                (limit, offset)
+            )
         elif user["role"] == "lawyer":
             res = await conn.execute(
-                "SELECT * FROM conversations WHERE lawyer_id = ? ORDER BY created_on DESC",
-                (user["lawyer_id"],),
+                "SELECT * FROM conversations WHERE lawyer_id = ? ORDER BY created_on DESC LIMIT ? OFFSET ?",
+                (user["lawyer_id"], limit, offset),
             )
         else:
             res = await conn.execute(
-                "SELECT * FROM conversations WHERE client_user_id = ? ORDER BY created_on DESC",
-                (user["id"],),
+                "SELECT * FROM conversations WHERE client_user_id = ? ORDER BY created_on DESC LIMIT ? OFFSET ?",
+                (user["id"], limit, offset),
             )
         rows = res.fetchall()
     return [dict(row) for row in rows]

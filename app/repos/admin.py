@@ -58,17 +58,17 @@ async def create_notification(
     return dict(row) if row else {}
 
 
-async def list_notifications(user_id: int, unread_only: bool = False) -> list[dict[str, Any]]:
+async def list_notifications(user_id: int, unread_only: bool = False, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
     async with connect() as conn:
         if unread_only:
             res = await conn.execute(
-                "SELECT * FROM notifications WHERE user_id = ? AND is_read = false ORDER BY created_on DESC",
-                (user_id,),
+                "SELECT * FROM notifications WHERE user_id = ? AND is_read = false ORDER BY created_on DESC LIMIT ? OFFSET ?",
+                (user_id, limit, offset),
             )
         else:
             res = await conn.execute(
-                "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_on DESC",
-                (user_id,),
+                "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_on DESC LIMIT ? OFFSET ?",
+                (user_id, limit, offset),
             )
         rows = res.fetchall()
     return [dict(row) for row in rows]

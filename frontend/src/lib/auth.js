@@ -3,10 +3,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { apiUrl } from "@/lib/api";
 
-const ACCESS_TOKEN_KEY = "access_token";
-const REFRESH_TOKEN_KEY = "refresh_token";
-const LEGACY_TOKEN_KEY = "token";
-
 const AuthContext = createContext({
   user: null,
   login: async () => {},
@@ -19,33 +15,14 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const clearSession = useCallback(() => {
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
-    localStorage.removeItem(LEGACY_TOKEN_KEY);
-    setUser(null);
-  }, []);
-
-  const getStoredAccessToken = useCallback(() => {
-    return localStorage.getItem(ACCESS_TOKEN_KEY) || localStorage.getItem(LEGACY_TOKEN_KEY);
-  }, []);
-
-  const persistTokens = useCallback((accessToken, refreshToken) => {
-    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-    localStorage.setItem(LEGACY_TOKEN_KEY, accessToken);
-    if (refreshToken) {
-      localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-    }
-  }, []);
-
-  const fetchProfile = useCallback(async (accessToken) => {
+  const fetchProfile = useCallback(async () => {
     try {
       const res = await fetch(apiUrl("/api/auth/me"), {
-        headers: { "X-Auth-Token": accessToken },
+        credentials: "include",
       });
       if (res.ok) {
         const data = await res.json();
-        return { ...data, token: accessToken };
+        return data;
       }
       return null;
     } catch (err) {
@@ -54,62 +31,46 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const refreshAccessToken = useCallback(async () => {
-    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-    if (!refreshToken) {
-      return null;
-    }
-
+  const refreshSession = useCallback(async () => {
     try {
       const res = await fetch(apiUrl("/api/auth/refresh"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh_token: refreshToken }),
+        credentials: "include",
+        body: JSON.stringify({ refresh_token: "" }), // Backend reads cookie
       });
 
       if (!res.ok) {
-        clearSession();
-        return null;
+        setUser(null);
+        return false;
       }
-
-      const data = await res.json();
-      persistTokens(data.access_token, data.refresh_token);
-      return data.access_token;
+      return true;
     } catch (err) {
       console.error(err);
-      clearSession();
-      return null;
+      setUser(null);
+      return false;
     }
-  }, [clearSession, persistTokens]);
+  }, []);
 
   const hydrateSession = useCallback(async () => {
-    const accessToken = getStoredAccessToken();
-    if (!accessToken) {
-      setLoading(false);
-      return;
-    }
-
-    let resolvedToken = accessToken;
-    let profile = await fetchProfile(resolvedToken);
+    // Attempt to fetch profile assuming cookies are present
+    let profile = await fetchProfile();
 
     if (!profile) {
-      const refreshedToken = await refreshAccessToken();
-      if (!refreshedToken) {
-        setLoading(false);
-        return;
+      // If unauthorized, maybe access token expired but refresh token is valid
+      const refreshed = await refreshSession();
+      if (refreshed) {
+        profile = await fetchProfile();
       }
-      resolvedToken = refreshedToken;
-      profile = await fetchProfile(resolvedToken);
     }
 
     if (profile) {
       setUser(profile);
     } else {
-      clearSession();
+      setUser(null);
     }
-
     setLoading(false);
-  }, [clearSession, fetchProfile, getStoredAccessToken, refreshAccessToken]);
+  }, [fetchProfile, refreshSession]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -121,6 +82,7 @@ export function AuthProvider({ children }) {
       const res = await fetch(apiUrl("/api/auth/login"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ email, password }),
       });
 
@@ -129,9 +91,8 @@ export function AuthProvider({ children }) {
       }
 
       const data = await res.json();
-      persistTokens(data.access_token, data.refresh_token);
-
-      const profile = await fetchProfile(data.access_token);
+      
+      const profile = await fetchProfile();
       if (profile) {
         setUser(profile);
       } else {
@@ -141,7 +102,6 @@ export function AuthProvider({ children }) {
           full_name: data.full_name,
           role: data.role,
           lawyer_id: data.lawyer_id || null,
-          token: data.access_token,
         });
       }
       return true;
@@ -152,56 +112,49 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
-    const accessToken = user?.token || getStoredAccessToken();
-    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-    if (accessToken || refreshToken) {
-      try {
-        await fetch(apiUrl("/api/auth/logout"), {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(accessToken ? { "X-Auth-Token": accessToken } : {}),
-          },
-          body: JSON.stringify({ refresh_token: refreshToken }),
-        });
-      } catch (err) {
-        console.error(err);
-      }
+    try {
+      await fetch(apiUrl("/api/auth/logout"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ refresh_token: "" }), // Backend clears cookies
+      });
+    } catch (err) {
+      console.error(err);
     }
-    clearSession();
+    setUser(null);
   };
 
   const authFetch = useCallback(
     async (path, options = {}) => {
-      const makeRequest = (token) => {
-        const nextHeaders = {
-          ...(options.headers || {}),
-          ...(token ? { "X-Auth-Token": token } : {}),
-        };
-        return fetch(apiUrl(path), { ...options, headers: nextHeaders });
+      const makeRequest = () => {
+        return fetch(apiUrl(path), { 
+            ...options, 
+            credentials: "include" 
+        });
       };
 
-      let accessToken = getStoredAccessToken();
-      let response = await makeRequest(accessToken);
+      let response = await makeRequest();
       if (response.status !== 401) {
         return response;
       }
 
-      const refreshedToken = await refreshAccessToken();
-      if (!refreshedToken) {
-        return response;
+      // If 401, try to refresh token
+      const refreshed = await refreshSession();
+      if (!refreshed) {
+        return response; // Still 401
       }
 
-      accessToken = refreshedToken;
-      const profile = await fetchProfile(accessToken);
+      const profile = await fetchProfile();
       if (profile) {
         setUser(profile);
       }
 
-      response = await makeRequest(accessToken);
+      // Retry original request
+      response = await makeRequest();
       return response;
     },
-    [fetchProfile, getStoredAccessToken, refreshAccessToken],
+    [fetchProfile, refreshSession],
   );
 
   return (

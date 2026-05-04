@@ -128,10 +128,11 @@ async def generate_engagement_letter(consultation_id: int) -> dict[str, Any] | N
     pdf.output(str(target_path))
     
     # Register as a document in the DB
-    # We'll use the lawyer/admin as the 'uploaded_by' ID (simplified to 1 for system)
+    # Attribute to the client who booked the consultation
+    system_user_id = cons["client_user_id"]
     doc = await create_document(
         consultation_id=consultation_id,
-        uploaded_by_user_id=1, # System/Admin
+        uploaded_by_user_id=system_user_id,
         document_label="Engagement Letter",
         original_filename=filename,
         content_type="application/pdf",
@@ -200,10 +201,11 @@ async def generate_tax_receipt(payment_id: int) -> dict[str, Any] | None:
     target_path.parent.mkdir(parents=True, exist_ok=True)
     pdf.output(str(target_path))
     
-    # Register doc
+    # Register doc — attribute to the client who owns the consultation
+    system_user_id = cons["client_user_id"]
     return await create_document(
         consultation_id=cons["id"],
-        uploaded_by_user_id=1,
+        uploaded_by_user_id=system_user_id,
         document_label="Tax Receipt",
         original_filename=f"Receipt_{payment['reference']}.pdf",
         content_type="application/pdf",
