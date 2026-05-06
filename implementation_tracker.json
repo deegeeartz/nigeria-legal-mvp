@@ -66,21 +66,21 @@
     {
       "id": 7,
       "name": "Client Reviews",
-      "status": "pending",
+      "status": "completed",
       "tasks": [
-        {"name": "Create lawyer_reviews migration", "status": "pending"},
-        {"name": "Implement reviews.py router", "status": "pending"},
-        {"name": "Update ranking.py to compute dynamic rating", "status": "pending"}
+        {"name": "Create lawyer_reviews migration", "status": "completed"},
+        {"name": "Implement reviews.py router", "status": "completed"},
+        {"name": "Update ranking.py to compute dynamic rating", "status": "completed"}
       ]
     },
     {
       "id": 8,
       "name": "Video Consultation",
-      "status": "pending",
+      "status": "completed",
       "tasks": [
-        {"name": "Create video_provider.py", "status": "pending"},
-        {"name": "Update consultations router for video links", "status": "pending"},
-        {"name": "Build frontend Join Video Call UI", "status": "pending"}
+        {"name": "Create video_provider.py", "status": "completed"},
+        {"name": "Update consultations router for video links", "status": "completed"},
+        {"name": "Build frontend Join Video Call UI", "status": "completed"}
       ]
     }
   ]

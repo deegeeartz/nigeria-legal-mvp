@@ -339,7 +339,20 @@ export default function ConsultationsPage() {
             </div>
 
             <div className="bg-white p-5 rounded-2xl border border-slate-100 lg:col-span-2">
-              <h2 className="font-bold text-slate-800 mb-1">Documents</h2>
+              <div className="flex items-center justify-between mb-1">
+                <h2 className="font-bold text-slate-800">Workspace</h2>
+                {selectedConsultation?.video_room_url && (
+                  <a
+                    href={selectedConsultation.video_room_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold transition-colors shadow-sm"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                    Join Video Call
+                  </a>
+                )}
+              </div>
               {selectedConsultation && (
                 <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                   <p className="text-sm text-slate-500">

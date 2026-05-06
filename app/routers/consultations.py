@@ -41,7 +41,9 @@ from app.models import (
 )
 from app.services.document_service import generate_engagement_letter
 from app.services.email_service import send_consultation_booked_email
+from app.services.video_provider import create_video_room
 from app.security import scan_upload_for_malware, MalwareDetectedError, MalwareScanError
+from datetime import datetime
 
 
 MAX_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024
@@ -53,6 +55,43 @@ def _scheduled_for_as_str(value: object) -> str:
     return value.isoformat() if hasattr(value, "isoformat") else str(value)
 
 
+def _build_consultation_response(item: dict, adr_notice: Optional[str] = None) -> ConsultationResponse:
+    """Build a ConsultationResponse, attaching video room info for booked/paid consultations."""
+    video_room_url = None
+    video_opens_at = None
+    video_expires_at = None
+
+    # Only expose video link for consultations that are booked or completed
+    if item.get("status") in ("booked", "completed"):
+        try:
+            scheduled_str = _scheduled_for_as_str(item["scheduled_for"])
+            scheduled_dt = item["scheduled_for"] if isinstance(item["scheduled_for"], datetime) else datetime.fromisoformat(scheduled_str)
+            video = create_video_room(item["id"], scheduled_dt)
+            video_room_url = video["join_url"]
+            video_opens_at = video["opens_at"]
+            video_expires_at = video["expires_at"]
+        except Exception:
+            pass
+
+    return ConsultationResponse(
+        consultation_id=item["id"],
+        client_user_id=item["client_user_id"],
+        lawyer_id=item["lawyer_id"],
+        scheduled_for=_scheduled_for_as_str(item["scheduled_for"]),
+        summary=item["summary"],
+        status=item["status"],
+        created_on=item["created_on"],
+        opposing_party_name=item.get("opposing_party_name"),
+        opposing_party_nin=item.get("opposing_party_nin"),
+        opposing_party_rc_number=item.get("opposing_party_rc_number"),
+        is_contingency=item.get("is_contingency", False),
+        contingency_percentage=item.get("contingency_percentage"),
+        video_room_url=video_room_url,
+        video_opens_at=video_opens_at,
+        video_expires_at=video_expires_at,
+    )
+
+
 @router.get("/api/consultations", response_model=list[ConsultationResponse])
 async def list_consultations_endpoint(
     limit: int = Query(default=50, ge=1, le=100),
@@ -60,25 +99,8 @@ async def list_consultations_endpoint(
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> list[ConsultationResponse]:
     user = await require_user(x_auth_token)
-    return [
-        ConsultationResponse(
-            consultation_id=item["id"],
-            client_user_id=item["client_user_id"],
-            lawyer_id=item["lawyer_id"],
-            scheduled_for=_scheduled_for_as_str(item["scheduled_for"]),
-            summary=item["summary"],
-            status=item["status"],
-            created_on=item["created_on"],
-            opposing_party_name=item.get("opposing_party_name"),
-            opposing_party_nin=item.get("opposing_party_nin"),
-            opposing_party_rc_number=item.get("opposing_party_rc_number"),
-            is_contingency=item.get("is_contingency", False),
-            contingency_percentage=item.get("contingency_percentage"),
-            matter_type=item.get("matter_type", "general"),
-            adr_preferred=bool(item.get("adr_preferred", False)),
-        )
-        for item in await list_consultations_for_user(user, limit=limit, offset=offset)
-    ]
+    items = await list_consultations_for_user(user, limit=limit, offset=offset)
+    return [_build_consultation_response(item) for item in items]
 
 
 @router.post("/api/consultations", response_model=ConsultationResponse)
@@ -156,23 +178,7 @@ async def book_consultation(
         "Your assigned legal practitioner will advise on suitable ADR forums."
     )
 
-    return ConsultationResponse(
-        consultation_id=consultation["id"],
-        client_user_id=consultation["client_user_id"],
-        lawyer_id=consultation["lawyer_id"],
-        scheduled_for=_scheduled_for_as_str(consultation["scheduled_for"]),
-        summary=consultation["summary"],
-        status=consultation["status"],
-        created_on=consultation["created_on"],
-        opposing_party_name=consultation.get("opposing_party_name"),
-        opposing_party_nin=consultation.get("opposing_party_nin"),
-        opposing_party_rc_number=consultation.get("opposing_party_rc_number"),
-        is_contingency=consultation.get("is_contingency", False),
-        contingency_percentage=consultation.get("contingency_percentage"),
-        matter_type=consultation.get("matter_type", "general"),
-        adr_preferred=bool(consultation.get("adr_preferred", False)),
-        adr_notice=_ADR_NOTICE if payload.adr_preferred else None,
-    )
+    return _build_consultation_response(consultation, adr_notice=_ADR_NOTICE if payload.adr_preferred else None)
 
 
 @router.get("/api/consultations/{consultation_id}", response_model=ConsultationResponse)
@@ -186,22 +192,7 @@ async def get_consultation_endpoint(
     consultation = await get_consultation(consultation_id)
     if consultation is None:
         raise HTTPException(status_code=404, detail="Consultation not found")
-    return ConsultationResponse(
-        consultation_id=consultation["id"],
-        client_user_id=consultation["client_user_id"],
-        lawyer_id=consultation["lawyer_id"],
-        scheduled_for=_scheduled_for_as_str(consultation["scheduled_for"]),
-        summary=consultation["summary"],
-        status=consultation["status"],
-        created_on=consultation["created_on"],
-        opposing_party_name=consultation.get("opposing_party_name"),
-        opposing_party_nin=consultation.get("opposing_party_nin"),
-        opposing_party_rc_number=consultation.get("opposing_party_rc_number"),
-        is_contingency=consultation.get("is_contingency", False),
-        contingency_percentage=consultation.get("contingency_percentage"),
-        matter_type=consultation.get("matter_type", "general"),
-        adr_preferred=bool(consultation.get("adr_preferred", False)),
-    )
+    return _build_consultation_response(consultation)
 
 
 @router.patch("/api/consultations/{consultation_id}/status", response_model=ConsultationResponse)
@@ -243,22 +234,7 @@ async def update_consultation_status_endpoint(
         resource_id=str(consultation_id),
         exclude_user_id=user["id"],
     )
-    return ConsultationResponse(
-        consultation_id=updated["id"],
-        client_user_id=updated["client_user_id"],
-        lawyer_id=updated["lawyer_id"],
-        scheduled_for=_scheduled_for_as_str(updated["scheduled_for"]),
-        summary=updated["summary"],
-        status=updated["status"],
-        created_on=updated["created_on"],
-        opposing_party_name=updated.get("opposing_party_name"),
-        opposing_party_nin=updated.get("opposing_party_nin"),
-        opposing_party_rc_number=updated.get("opposing_party_rc_number"),
-        is_contingency=updated.get("is_contingency", False),
-        contingency_percentage=updated.get("contingency_percentage"),
-        matter_type=updated.get("matter_type", "general"),
-        adr_preferred=bool(updated.get("adr_preferred", False)),
-    )
+    return _build_consultation_response(updated)
 
 
 @router.post("/api/consultations/{consultation_id}/documents", response_model=DocumentResponse)

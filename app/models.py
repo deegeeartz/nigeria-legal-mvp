@@ -266,6 +266,7 @@ class NotificationKind(str, Enum):
     payment_updated = "payment_updated"
     complaint_updated = "complaint_updated"
     kyc_updated = "kyc_updated"
+    review_received = "review_received"
 
 
 class ConversationCreateRequest(BaseModel):
@@ -326,6 +327,37 @@ class ConsultationResponse(BaseModel):
     opposing_party_rc_number: Optional[str] = None
     is_contingency: bool = False
     contingency_percentage: Optional[float] = None
+    video_room_url: Optional[str] = None
+    video_opens_at: Optional[str] = None
+    video_expires_at: Optional[str] = None
+
+
+class ReviewCreateRequest(BaseModel):
+    consultation_id: int
+    rating: int = Field(ge=1, le=5)
+    review_text: Optional[str] = Field(default=None, max_length=2000)
+
+
+class ReviewReplyRequest(BaseModel):
+    reply_text: str = Field(min_length=1, max_length=2000)
+
+
+class ReviewResponse(BaseModel):
+    review_id: int
+    consultation_id: int
+    client_user_id: int
+    lawyer_id: str
+    rating: int
+    review_text: Optional[str] = None
+    lawyer_reply: Optional[str] = None
+    lawyer_replied_on: Optional[datetime] = None
+    created_on: datetime
+
+
+class LawyerRatingSummary(BaseModel):
+    lawyer_id: str
+    average_rating: float
+    review_count: int
 
 
 class PaymentCreateRequest(BaseModel):
