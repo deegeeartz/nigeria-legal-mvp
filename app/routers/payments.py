@@ -203,15 +203,13 @@ async def simulate_payment_action(
 
 @router.post("/api/payments/webhook")
 async def paystack_webhook(request: Request):
+    raw_body = await request.body()
     if PAYSTACK_WEBHOOK_ENFORCE_SIGNATURE:
-        if not PAYSTACK_SECRET_KEY:
-            raise HTTPException(status_code=503, detail="Webhook signature verification is enabled but PAYSTACK_SECRET_KEY is not configured")
-        raw_body = await request.body()
         signature = request.headers.get("X-Paystack-Signature")
+        if not signature:
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
         if not _verify_paystack_signature(raw_body, signature):
             raise HTTPException(status_code=401, detail="Invalid webhook signature")
-    else:
-        raw_body = await request.body()
 
     try:
         payload = json.loads(raw_body.decode("utf-8"))

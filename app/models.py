@@ -85,6 +85,7 @@ class Lawyer:
     bvn: str | None = None
     bar_chapter: str | None = None  # e.g. "Ikeja", "Lagos Island", "Port Harcourt"
     pro_bono_practice_areas: List[str] | None = None  # Targeted categories for free service
+    profile_picture_url: str | None = None
 
     @property
     def price_display(self) -> str:
@@ -135,6 +136,7 @@ class LawyerProfileResponse(BaseModel):
     bar_chapter: str | None = None
     practice_areas: List[str]
     pro_bono_practice_areas: List[str] | None = None
+    profile_picture_url: str | None = None
     verification: dict
     stats: dict
     disclaimer: str
@@ -167,6 +169,7 @@ class UserRole(str, Enum):
     client = "client"
     lawyer = "lawyer"
     admin = "admin"
+    dpo = "dpo"
 
 
 class SignUpRequest(BaseModel):
@@ -174,6 +177,7 @@ class SignUpRequest(BaseModel):
     password: str = Field(min_length=8, max_length=120)
     full_name: str = Field(min_length=2, max_length=120)
     role: UserRole
+    phone_number: str | None = Field(default=None, min_length=10, max_length=20, pattern=r"^\+?[0-9\-\s]+$")
     lawyer_id: str | None = Field(default=None, min_length=3, max_length=40)
 
     @field_validator("password")
@@ -198,6 +202,9 @@ class AuthResponse(BaseModel):
     email: str
     full_name: str
     role: UserRole
+    phone_number: str | None = None
+    profile_picture_url: str | None = None
+    nin_verified: bool = False
     lawyer_id: str | None = None
     access_token: str
     refresh_token: str
@@ -218,6 +225,9 @@ class UserProfileResponse(BaseModel):
     email: str
     full_name: str
     role: UserRole
+    phone_number: str | None = None
+    profile_picture_url: str | None = None
+    nin_verified: bool = False
     lawyer_id: str | None = None
 
 
@@ -250,6 +260,16 @@ class ConsultationStatus(str, Enum):
     booked = "booked"
     completed = "completed"
     cancelled = "cancelled"
+
+
+class MatterType(str, Enum):
+    general = "general"
+    litigation = "litigation"
+    arbitration = "arbitration"
+    mediation = "mediation"
+    negotiation = "negotiation"
+    contract_review = "contract_review"
+    advisory = "advisory"
 
 
 class PaymentStatus(str, Enum):
@@ -303,6 +323,8 @@ class ConsultationCreateRequest(BaseModel):
     opposing_party_rc_number: Optional[str] = Field(default=None, max_length=20, description="CAC RC number if opposing party is a company")
     is_contingency: bool = False
     contingency_percentage: Optional[float] = Field(default=None, ge=0, le=100)
+    matter_type: MatterType = MatterType.general
+    adr_preferred: bool = False
 
 
 class ConsultationStatusUpdateRequest(BaseModel):
@@ -327,6 +349,9 @@ class ConsultationResponse(BaseModel):
     opposing_party_rc_number: Optional[str] = None
     is_contingency: bool = False
     contingency_percentage: Optional[float] = None
+    matter_type: str = "general"
+    adr_preferred: bool = False
+    adr_notice: Optional[str] = None
     video_room_url: Optional[str] = None
     video_opens_at: Optional[str] = None
     video_expires_at: Optional[str] = None

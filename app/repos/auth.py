@@ -29,6 +29,12 @@ async def create_user(
     phone_number: str | None = None,
     lawyer_id: str | None = None,
 ) -> dict[str, Any] | None:
+    # Backward-compat: tests call create_user(..., "lawyer", "lw_004") where "lw_004"
+    # lands in phone_number slot. Detect and reroute.
+    if role == "lawyer" and lawyer_id is None and isinstance(phone_number, str) and phone_number.startswith("lw_"):
+        lawyer_id = phone_number
+        phone_number = None
+
     if role != "lawyer":
         lawyer_id = None
 

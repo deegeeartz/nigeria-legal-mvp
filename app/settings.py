@@ -46,11 +46,17 @@ PAYSTACK_PUBLIC_KEY = os.getenv("PAYSTACK_PUBLIC_KEY", "")
 PAYSTACK_WEBHOOK_ENFORCE_SIGNATURE = _env_bool("PAYSTACK_WEBHOOK_ENFORCE_SIGNATURE", True)
 
 # Email Settings (SMTP)
+EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "smtp").strip().lower()
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = _env_int("SMTP_PORT", 587)
 SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", "noreply@legalmvp.com.ng")
+SENDPULSE_API_BASE_URL = os.getenv("SENDPULSE_API_BASE_URL", "https://api.sendpulse.com").strip().rstrip("/")
+SENDPULSE_CLIENT_ID = os.getenv("SENDPULSE_CLIENT_ID", "").strip()
+SENDPULSE_CLIENT_SECRET = os.getenv("SENDPULSE_CLIENT_SECRET", "").strip()
+SENDPULSE_FROM_EMAIL = os.getenv("SENDPULSE_FROM_EMAIL", SMTP_FROM_EMAIL).strip()
+SENDPULSE_FROM_NAME = os.getenv("SENDPULSE_FROM_NAME", "Nigeria Legal MVP").strip()
 
 # CORS Configuration
 _CORS_DEFAULT = "http://localhost:3000,http://127.0.0.1:3000"

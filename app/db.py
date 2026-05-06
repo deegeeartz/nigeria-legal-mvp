@@ -19,6 +19,9 @@ from app.repos.connection import (  # noqa: F401
     _convert_qmark_sql,
     _db_bool,
     connect,
+    encrypt_pii,
+    decrypt_pii,
+    hash_pii,
     init_db,
     _now,
     _iso,
@@ -41,6 +44,8 @@ from app.repos.auth import (  # noqa: F401
     force_expire_access_token_for_tests,
     get_lawyer_user_ids,
     get_user_by_id,
+    save_user,
+    get_user_by_nin,
 )
 from app.repos.lawyers import (  # noqa: F401
     row_to_lawyer,

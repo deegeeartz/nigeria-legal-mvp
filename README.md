@@ -127,6 +127,30 @@ Key variables:
 - `SLOW_REQUEST_MS`
 - `ENABLE_REQUEST_LOGGING`
 
+Email provider variables:
+
+- `EMAIL_PROVIDER` (`smtp` or `sendpulse`)
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USER`
+- `SMTP_PASSWORD`
+- `SMTP_FROM_EMAIL`
+- `SENDPULSE_API_BASE_URL` (default: `https://api.sendpulse.com`)
+- `SENDPULSE_CLIENT_ID`
+- `SENDPULSE_CLIENT_SECRET`
+- `SENDPULSE_FROM_EMAIL`
+- `SENDPULSE_FROM_NAME`
+
+SendPulse example:
+
+```env
+EMAIL_PROVIDER=sendpulse
+SENDPULSE_CLIENT_ID=your_sendpulse_client_id
+SENDPULSE_CLIENT_SECRET=your_sendpulse_client_secret
+SENDPULSE_FROM_EMAIL=noreply@yourdomain.com
+SENDPULSE_FROM_NAME=Nigeria Legal MVP
+```
+
 PostgreSQL readiness variables:
 
 - `POSTGRES_HOST`

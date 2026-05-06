@@ -27,6 +27,7 @@ from app.routers import (
     payments,
     compliance,
     users,
+    reviews,
 )
 
 
@@ -134,3 +135,4 @@ app.include_router(consultations.router)
 app.include_router(payments.router)
 app.include_router(compliance.router)
 app.include_router(users.router)
+app.include_router(reviews.router)

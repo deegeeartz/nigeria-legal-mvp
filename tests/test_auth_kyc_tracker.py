@@ -292,5 +292,4 @@ async def test_lawyer_nin_auto_verification(client) -> None:
         headers={"X-Auth-Token": token},
         data={"nin": "SHORT"},
     )
-    assert result_bad.status_code == 200
-    assert result_bad.json()["nin_verified"] is False
+    assert result_bad.status_code == 400
