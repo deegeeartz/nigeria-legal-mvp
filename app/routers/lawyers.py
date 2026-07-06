@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Query
 from typing import Optional
 
 from app.dependencies import (
@@ -92,10 +92,12 @@ async def file_complaint(
 @router.get("/api/complaints/{lawyer_id}", response_model=list[ComplaintResponse])
 async def list_complaints(
     lawyer_id: str,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ) -> list[ComplaintResponse]:
     await require_user(x_auth_token)
-    items = await list_complaints_for_lawyer(lawyer_id)
+    items = await list_complaints_for_lawyer(lawyer_id, limit=limit, offset=offset)
     return [
         ComplaintResponse(
             complaint_id=item["id"],

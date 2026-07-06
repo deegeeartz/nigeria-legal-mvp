@@ -41,11 +41,11 @@ async def create_complaint(lawyer_id: str, category: ComplaintCategory, details:
     return dict(row) if row else None
 
 
-async def list_complaints_for_lawyer(lawyer_id: str) -> list[dict[str, Any]]:
+async def list_complaints_for_lawyer(lawyer_id: str, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
     async with connect() as conn:
         res = await conn.execute(
-            "SELECT * FROM complaints WHERE lawyer_id = ? ORDER BY id DESC",
-            (lawyer_id,),
+            "SELECT * FROM complaints WHERE lawyer_id = ? ORDER BY id DESC LIMIT ? OFFSET ?",
+            (lawyer_id, limit, offset),
         )
         rows = res.fetchall()
     return [dict(row) for row in rows]

@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Cookie, Header, HTTPException, Request, Response, BackgroundTasks
 from typing import Optional
+from time import time
+from secrets import token_urlsafe
 from app.dependencies import (
     log_event,
     require_user,
@@ -41,6 +43,42 @@ _COOKIE_SAMESITE = "lax"
 _COOKIE_HTTPONLY = True
 _ACCESS_COOKIE = "access_token"
 _REFRESH_COOKIE = "refresh_token"
+
+# ---------------------------------------------------------------------------
+# WebSocket ticket store (short-lived, single-use tokens)
+# ---------------------------------------------------------------------------
+_WS_TICKET_TTL_SECONDS = 30
+_ws_tickets: dict[str, dict] = {}  # ticket -> {"user_id": int, "expires_at": float}
+
+
+def _cleanup_expired_tickets() -> None:
+    """Remove expired tickets from the store."""
+    now = time()
+    expired = [t for t, info in _ws_tickets.items() if info["expires_at"] < now]
+    for t in expired:
+        _ws_tickets.pop(t, None)
+
+
+def issue_ws_ticket(user_id: int) -> str:
+    """Issue a short-lived, single-use ticket for WebSocket auth."""
+    _cleanup_expired_tickets()
+    ticket = token_urlsafe(32)
+    _ws_tickets[ticket] = {
+        "user_id": user_id,
+        "expires_at": time() + _WS_TICKET_TTL_SECONDS,
+    }
+    return ticket
+
+
+def consume_ws_ticket(ticket: str) -> int | None:
+    """Consume a ticket and return the user_id, or None if invalid/expired."""
+    _cleanup_expired_tickets()
+    info = _ws_tickets.pop(ticket, None)
+    if info is None:
+        return None
+    if info["expires_at"] < time():
+        return None
+    return info["user_id"]
 
 
 def _set_auth_cookies(response: Response, token_bundle: dict) -> None:
@@ -233,3 +271,20 @@ async def me(
         nin_verified=bool(user.get("nin_verified", False)),
         lawyer_id=user.get("lawyer_id"),
     )
+
+@router.get("/ws-ticket")
+async def get_ws_ticket(
+    x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
+    access_token_cookie: Optional[str] = Cookie(default=None, alias="access_token"),
+) -> dict:
+    """Issue a short-lived, single-use ticket for WebSocket authentication.
+
+    Since HTTP-only cookies cannot be read by JavaScript to pass as
+    query parameters on WebSocket connections, this endpoint lets the
+    frontend exchange its cookie-based session for a one-time ticket
+    that the /ws endpoint will consume.
+    """
+    token = _resolve_access_token(x_auth_token, access_token_cookie)
+    user = await require_user(token)
+    ticket = issue_ws_ticket(user["id"])
+    return {"ticket": ticket}

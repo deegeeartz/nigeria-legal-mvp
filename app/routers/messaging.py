@@ -178,18 +178,23 @@ async def send_message(
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
-    # Verify token
-    if not token:
+async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None, ticket: Optional[str] = None):
+    user_id: int | None = None
+
+    # Prefer ticket-based auth (cookie-compatible flow)
+    if ticket:
+        from app.routers.auth import consume_ws_ticket
+        user_id = consume_ws_ticket(ticket)
+    # Fallback: direct token auth (for API clients / tests)
+    elif token:
+        user = await get_user_by_access_token(token)
+        if user:
+            user_id = user["id"]
+
+    if user_id is None:
         await websocket.close(code=1008)
         return
     
-    user = await get_user_by_access_token(token)
-    if not user:
-        await websocket.close(code=1008)
-        return
-    
-    user_id = user["id"]
     await manager.connect(user_id, websocket)
     try:
         while True:

@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { AlertCircle, Loader2, UserPlus } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { apiUrl } from "@/lib/api";
+import ConsentBanner from "@/components/ConsentBanner";
 
 const ROLE_CONFIG = {
   client: {
@@ -45,6 +46,7 @@ export default function RoleSignupPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showConsent, setShowConsent] = useState(false);
 
   const onSubmit = async (event) => {
     event.preventDefault();
@@ -67,6 +69,7 @@ export default function RoleSignupPage() {
       const response = await fetch(apiUrl("/api/auth/signup"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(payload),
       });
 
@@ -83,7 +86,8 @@ export default function RoleSignupPage() {
         return;
       }
 
-      router.push("/dashboard");
+      // Show blocking consent banner before allowing access
+      setShowConsent(true);
     } catch (submitError) {
       console.error(submitError);
       setError("Unexpected error. Please try again.");
@@ -107,80 +111,87 @@ export default function RoleSignupPage() {
   }
 
   return (
-    <div className="flex-1 flex items-center justify-center p-6 bg-slate-50 pb-24 md:pb-6">
-      <div className="w-full max-w-lg bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
-        <div className="text-center mb-8">
-          <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide mb-3 ${config.accentLabelClass}`}>
-            {config.accentLabel}
-          </span>
-          <h1 className="text-3xl font-black text-slate-900">{config.title}</h1>
-          <p className="text-slate-500 mt-2">{config.subtitle}</p>
-        </div>
+    <>
+      {showConsent && (
+        <ConsentBanner onConsented={() => router.push("/dashboard")} />
+      )}
 
-        {error && (
-          <div className="mb-6 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 text-sm text-rose-700 flex items-start gap-2">
-            <AlertCircle className="w-5 h-5 shrink-0" />
-            <span>{error}</span>
+      <div className="flex-1 flex items-center justify-center p-6 bg-slate-50 pb-24 md:pb-6">
+        <div className="w-full max-w-lg bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
+          <div className="text-center mb-8">
+            <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide mb-3 ${config.accentLabelClass}`}>
+              {config.accentLabel}
+            </span>
+            <h1 className="text-3xl font-black text-slate-900">{config.title}</h1>
+            <p className="text-slate-500 mt-2">{config.subtitle}</p>
           </div>
-        )}
 
-        <form className="space-y-4" onSubmit={onSubmit}>
-          <input
-            type="text"
-            required
-            value={fullName}
-            onChange={(event) => setFullName(event.target.value)}
-            placeholder="Full name"
-            className={`w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 ${config.focusRingClass}`}
-          />
+          {error && (
+            <div className="mb-6 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 text-sm text-rose-700 flex items-start gap-2">
+              <AlertCircle className="w-5 h-5 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
 
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="Email"
-            className={`w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 ${config.focusRingClass}`}
-          />
-
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="Password (upper/lower/number/special)"
-            className={`w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 ${config.focusRingClass}`}
-          />
-
-          {config.requiresLawyerId && (
+          <form className="space-y-4" onSubmit={onSubmit}>
             <input
               type="text"
               required
-              value={lawyerId}
-              onChange={(event) => setLawyerId(event.target.value)}
-              placeholder="Linked Lawyer ID (e.g. lw_004)"
+              value={fullName}
+              onChange={(event) => setFullName(event.target.value)}
+              placeholder="Full name"
               className={`w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 ${config.focusRingClass}`}
             />
-          )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className={`w-full mt-2 px-4 py-3 rounded-xl text-white font-bold disabled:opacity-70 flex items-center justify-center gap-2 ${config.buttonClass}`}
-          >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <UserPlus className="w-5 h-5" />}
-            {loading ? "Creating account..." : "Create Account"}
-          </button>
-        </form>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="Email"
+              className={`w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 ${config.focusRingClass}`}
+            />
 
-        <p className="text-sm text-slate-500 text-center mt-6">
-          Already have an account? <Link href={config.loginHref} className="text-slate-800 font-semibold hover:opacity-80">Log In</Link>
-        </p>
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Password (upper/lower/number/special)"
+              className={`w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 ${config.focusRingClass}`}
+            />
 
-        <p className="text-sm text-slate-500 text-center mt-3">
-          <Link href="/signup" className="text-slate-600 font-semibold">Change role</Link>
-        </p>
+            {config.requiresLawyerId && (
+              <input
+                type="text"
+                required
+                value={lawyerId}
+                onChange={(event) => setLawyerId(event.target.value)}
+                placeholder="Linked Lawyer ID (e.g. lw_004)"
+                className={`w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 ${config.focusRingClass}`}
+              />
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className={`w-full mt-2 px-4 py-3 rounded-xl text-white font-bold disabled:opacity-70 flex items-center justify-center gap-2 ${config.buttonClass}`}
+            >
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <UserPlus className="w-5 h-5" />}
+              {loading ? "Creating account..." : "Create Account"}
+            </button>
+          </form>
+
+          <p className="text-sm text-slate-500 text-center mt-6">
+            Already have an account? <Link href={config.loginHref} className="text-slate-800 font-semibold hover:opacity-80">Log In</Link>
+          </p>
+
+          <p className="text-sm text-slate-500 text-center mt-3">
+            <Link href="/signup" className="text-slate-600 font-semibold">Change role</Link>
+          </p>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
+
