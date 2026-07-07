@@ -1,10 +1,10 @@
 # Nigeria Legal Marketplace — Codebase Review
 
-**Date**: April 21, 2026  
-**Test Suite**: 53 passed, 0 warnings ✅  
+**Date**: July 7, 2026  
+**Test Suite**: Pending (PostgreSQL connection timeout) ⚠️  
 **Branch**: `main`
 
-> **Note — Review Accuracy**: This document was re-verified on April 21, 2026 against the live codebase after edits to `app/main.py`, `app/ranking.py`, `app/routers/system.py`, `app/routers/consultations.py`, `app/repos/consultations.py`, `app/services/`, `app/repos/lawyers.py`, `app/models.py`, and `app/settings.py`. Several items previously listed as gaps have since been implemented and are marked accordingly.
+> **Note — Review Accuracy**: This document was re-verified on July 7, 2026 after the "Ecosystem Expansion" phase, which introduced the Knowledge Hub (Q&A/Articles), Geolocation Ranking (Haversine), and Document Templates (`fpdf2`).
 
 ---
 
@@ -59,8 +59,15 @@
   | Price-fit | 10% |
   | Availability | 5% |
 - **Adaptive new-lawyer exposure bands** (25/20/15/10%) — prevents incumbent lock-in, critical for marketplace fairness
+- **Distance-based Proximity Score** — utilizes Haversine formula against client and lawyer coordinates to reward hyper-local matching (0-50km scaling).
+- **Knowledge Contribution Score** — rewards lawyers points for answering community Q&A and publishing educational articles.
 - Async CPD / practice seal bonus lookup — rewards compliance-active lawyers
-- Explainable `why_recommended` reasons surfaced to clients
+- Explainable `why_recommended` reasons surfaced to clients (e.g. "📍 Close proximity", "🏆 Top Contributor")
+
+### Ecosystem Expansion (New)
+
+- **Knowledge Hub**: Anonymous Q&A and Educational Articles models built via `app/repos/knowledge.py`.
+- **Document Hub**: Structural setup for auto-generating DIY Nigerian legal templates (e.g. NDAs, Tenancy) as PDFs using `fpdf2` via `app/routers/templates.py`.
 
 ### Compliance — NDPA Phase 1 + Encryption ✅
 
@@ -104,6 +111,7 @@
 | **No real NIN/BVN verification** | `nin_verified` / `bvn_verified` flags are still set by simulation, not a live API | Integrate Dojah or Smile Identity for live NIN/BVN lookup                                        |
 | **NBA list sync is CSV-only**    | `POST /api/admin/sync/nba-disciplinary` requires manual admin CSV upload          | Add a scheduled job to auto-fetch from NBA public portal                                         |
 | **No milestone-gated escrow**    | Payment release is independent of consultation workflow                           | Require consultation `status == "completed"` + at least 1 milestone before `released` transition |
+| **Document Templates lack Legal Intelligence** | Currently using structural boilerplate only                       | Draft 5 high-quality static templates with a vetted Nigerian lawyer, or integrate LLM generation |
 
 > ✅ **Already done** — Conflict-of-interest check (`check_conflict`), contingency fee arrangements (`is_contingency` + success fee endpoint), and VAT fields (`vat_amount_ngn`, `total_plus_vat_ngn`) were previously listed as gaps but are now implemented.
 

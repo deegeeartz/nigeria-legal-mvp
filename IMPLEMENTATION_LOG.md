@@ -80,3 +80,11 @@ This log tracks all changes made against the [IMPLEMENTATION_ROADMAP.md](./IMPLE
 - **Frontend**: LIVE (Vercel)
 - **Database**: LIVE (Supabase)
 - **Storage**: LIVE (Supabase Buckets)
+
+---
+
+## July 7, 2026: Ecosystem Expansion (Phase 7 Drafted)
+- **Knowledge Hub**: Scaffolding built for anonymous Q&A and Lawyer Educational Articles (`app/repos/knowledge.py`). Linked to `knowledge_contribution_score` to boost SEO and lawyer ranks.
+- **Geolocation**: Implemented Haversine distance formula in `app/ranking.py`. Automatically allocates points for close proximity and awards a dynamic badge.
+- **Document Hub**: Scaffolded `fpdf2` template generation in `app/routers/templates.py`. Currently uses structural placeholders awaiting legal boilerplate drafting.
+- **Pending**: Local PostgreSQL connection timeout prevented DB schema migration (`alembic upgrade head`) and pytest verification. Awaiting database start.
