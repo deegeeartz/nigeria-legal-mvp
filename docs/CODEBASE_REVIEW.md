@@ -213,36 +213,31 @@ Replace the KYC approval step with a live call to:
 
 ---
 
-### 4.4 ADR (Alternative Dispute Resolution) Marketplace
+### 4.4 High-Value Payments (Monnify Virtual Accounts)
 
-Nigeria's Arbitration and Conciliation Act 2023 and ICAMA rules mean a significant volume of commercial disputes are resolved outside courts. Add:
-
-- `matter_type: "mediation" | "arbitration"` path in the intake flow
-- `has_adr_accreditation: bool` field on the `Lawyer` model
-- Separate matching filter for accredited mediators/arbitrators
-- Fee structure for ADR (typically hourly, not per-matter)
+Payments above ₦1M use the Monnify Virtual Accounts endpoint structure (`POST /api/payments/{id}/virtual-account`), but the actual API call is currently **simulated** (generating local fake account numbers).
+- **Action:** Integrate real Monnify APIs to create dynamic virtual accounts for NIP/Bank transfers for high-value transactions.
 
 ---
 
-### 4.5 Pidgin / Yoruba / Hausa / Igbo Localization
+### 4.5 Video Consultations Integration
 
-Nigeria's rural and semi-urban legal consumers are often not fluent English readers. A locale toggle on the intake and results pages would expand the addressable market significantly.
-
-- Add `locale: "en" | "pcm" | "yo" | "ha" | "ig"` param to intake endpoint
-- Backend stores all `description` fields in English; frontend handles translation via i18n JSON files
-- Pidgin (PCM) is the highest-reach single addition — covers most of southern Nigeria
+The `video_provider.py` service currently generates HMAC-signed room tokens (15-min early access, 2-hr expiry), but there is no actual video provider wired up.
+- **Action:** Integrate a WebRTC provider like **Daily.co** or **Twilio Video** to handle the actual video streams on the frontend `/video/{token}` route.
 
 ---
 
-### 4.6 Court e-Filing Integration (JISC, Lagos)
+### 4.6 Pidgin / Vernacular Localization (Frontend Wiring)
 
-Lagos State's Justice Information System (JISC) supports digital court filing. An integration that auto-populates court forms from consultation intake data would make this platform the lawyer's daily workflow tool — the strongest competitive moat available.
-
-- **Phase 6+ feature** — requires JISC API access (apply via Lagos State Ministry of Justice)
-- Pre-populate: originating summons, motion on notice, affidavits from consultation notes
-- File tracker: `GET /api/consultations/{id}/court-filing-status`
+The backend structure and `frontend/src/lib/i18n.js` scaffolding exist for Pidgin (PCM). However, it is not wired into the UI.
+- **Action:** Implement a language switcher in the Next.js frontend and replace hardcoded English strings on the intake and results pages using the `getTranslation` utility.
 
 ---
+
+### 4.7 End-to-End Encrypted (E2EE) Messaging
+
+Currently, the WebSocket and REST chat system stores messages in plaintext in PostgreSQL.
+- **Action:** Implement E2EE (e.g., using the Signal Protocol or basic public/private key pairs stored client-side) to ensure absolute attorney-client privilege.
 
 ### 4.7 FIRS VAT Receipt for Legal Fees ✅ IMPLEMENTED
 
@@ -294,19 +289,18 @@ Phase 4 (Weeks 3–4) — Engagement & Real-time
   ├── FIRS VAT PDF receipt on payment release
   └── Engagement letter: add enrollment_number + bar_chapter to PDF
 
-Phase 5 (Weeks 5–6) — Trust & Verification
-  ├── Real NIN/BVN via Dojah API (highest-priority trust gap)
+Phase 5 (Weeks 5–6) — External Integrations & Video
+  ├── Real NIN/BVN via Dojah or Smile ID API (highest-priority trust gap)
+  ├── Live Monnify Virtual Accounts for high-value payments
+  ├── Video Consultation Integration (Daily.co/Twilio)
   ├── Scheduled NBA disciplinary list sync (replace manual CSV)
-  ├── Milestone-gated escrow release
-  ├── Conflict detection by NIN/RC number (not just name string)
-  └── Load testing (Locust/K6) + connection pooling
+  └── Milestone-gated escrow release
 
-Phase 6 (Weeks 7–8) — Differentiation
-  ├── ADR marketplace (mediation/arbitration)
-  ├── Pidgin/Yoruba localization
+Phase 6 (Weeks 7–8) — Differentiation & Privacy
+  ├── Pidgin/Vernacular localization (UI wiring)
+  ├── End-to-End Encrypted (E2EE) Messaging
   ├── Automated daily DB backup (pg_dump script)
-  ├── SAST/DAST in CI/CD pipeline
-  └── Court e-filing integration (JISC Lagos)
+  └── SAST/DAST in CI/CD pipeline
 ```
 
 ---

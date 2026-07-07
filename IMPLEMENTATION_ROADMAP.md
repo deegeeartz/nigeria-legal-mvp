@@ -68,10 +68,33 @@ This roadmap sequences the recommended improvements to move from the current MVP
    - Required by NBA Rules of Professional Conduct (RPC).
 3. **Conflict-of-Interest Engine**
    - Basic check to ensure a lawyer hasn't already consulted with the opposing party on the same matter.
-4. **End-to-End Encrypted (E2EE) Messaging**
-   - Secure client-lawyer communications (Standard requirement for privileged information).
-5. **CI/CD & Automated Testing**
+
+## Phase 5: External API Integrations (Production Readiness)
+
+**Goal:** Replace mock implementations with live third-party services.
+
+1. **Real NIN Verification (KYC)**
+   - Integrate Dojah or Smile Identity API for live identity verification.
+   - Replace the mock `_simulate_nin_lookup` in `kyc.py`.
+2. **High-Value Payments (Monnify)**
+   - Connect the simulated Monnify virtual account logic to the live Monnify API.
+   - Secure webhooks and handle transfer receipts.
+3. **Video Consultations**
+   - Integrate a live video provider (e.g., Daily.co or Twilio Video).
+   - Wire the generated room tokens in `video_provider.py` to a real frontend video room UI.
+4. **UI Localization (Pidgin & Vernacular)**
+   - Complete the frontend integration of `i18n.js`.
+   - Add a language switcher to the UI and ensure dynamic string replacement.
+
+---
+
+## Phase 6: Privacy & Advanced Standards
+
+**Goal:** Ensure absolute client-lawyer privilege and data security.
+
+1. **End-to-End Encrypted (E2EE) Messaging**
+   - Secure client-lawyer communications.
+   - Move from plaintext PostgreSQL storage to a secure E2EE model (Standard requirement for privileged information).
+2. **CI/CD & Automated Testing**
    - Set up GitHub Actions for backend/frontend testing.
    - Implement E2E frontend tests (Playwright/Cypress).
-6. **Pidgin/Vernacular Localization**
-   - Add language support to improve accessibility for indigent or non-English speaking clients.

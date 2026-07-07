@@ -327,6 +327,7 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/auth/logout -Heade
 - Consultation document access is restricted to the owning client, assigned lawyer, or admin.
 - Sensitive actions are captured in audit events and accessible through `GET /api/audit-events` (admin-only).
 - Payment flow now uses a Paystack-style simulation contract (`initialize` + `verify`) while keeping simulation safety for MVP.
+- **External Integrations Note**: External APIs for Monnify (high-value payments), Dojah/Smile Identity (NIN verification), and video consultations (WebRTC) are currently simulated or scaffolded, and marked for Phase 5 production integration.
 
 ## PostgreSQL Operations
 

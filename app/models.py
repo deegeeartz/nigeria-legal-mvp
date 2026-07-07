@@ -86,6 +86,9 @@ class Lawyer:
     bar_chapter: str | None = None  # e.g. "Ikeja", "Lagos Island", "Port Harcourt"
     pro_bono_practice_areas: List[str] | None = None  # Targeted categories for free service
     profile_picture_url: str | None = None
+    knowledge_contribution_score: float = 0.0
+    latitude: float | None = None
+    longitude: float | None = None
 
     @property
     def price_display(self) -> str:
@@ -102,7 +105,8 @@ class IntakeRequest(BaseModel):
     court_type: str | None = Field(default=None, description="Filter by court type (e.g. 'sharia', 'federal_high_court')")
     legal_system: str | None = Field(default=None, description="Filter by legal system: common_law, sharia, customary")
     pro_bono_only: bool = False
-
+    client_latitude: float | None = Field(default=None, description="Client latitude for distance-based ranking")
+    client_longitude: float | None = Field(default=None, description="Client longitude for distance-based ranking")
 
 class MatchReason(BaseModel):
     label: str
@@ -684,5 +688,58 @@ class PracticeSealCheckResponse(BaseModel):
     cpd_compliant: bool
     apl_eligible: bool
     seal_badge_visible: bool  # show badge on profile
+
+
+class PublicQuestionCreateRequest(BaseModel):
+    summary: str = Field(min_length=10, max_length=2000)
+    category: str = Field(min_length=3, max_length=50)
+
+
+class PublicQuestionResponse(BaseModel):
+    id: int
+    summary: str
+    category: str
+    status: str
+    created_on: datetime
+
+
+class LawyerAnswerCreateRequest(BaseModel):
+    answer_body: str = Field(min_length=10, max_length=4000)
+
+
+class LawyerAnswerResponse(BaseModel):
+    id: int
+    question_id: int
+    lawyer_id: str
+    answer_body: str
+    upvotes: int
+    created_on: datetime
+
+
+class EducationalArticleCreateRequest(BaseModel):
+    title: str = Field(min_length=5, max_length=200)
+    body: str = Field(min_length=50, max_length=20000)
+
+
+class EducationalArticleResponse(BaseModel):
+    id: int
+    lawyer_id: str
+    title: str
+    body: str
+    upvotes: int
+    created_on: datetime
+
+
+class DocumentTemplateResponse(BaseModel):
+    id: int
+    name: str
+    description: str
+    category: str
+    price_ngn: int
+    created_on: datetime
+
+
+class TemplateGenerateRequest(BaseModel):
+    variables: dict
 
 

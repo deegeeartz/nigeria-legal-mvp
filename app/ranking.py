@@ -6,12 +6,14 @@ from typing import Dict, List, Tuple
 from app.models import ExpertiseTier, IntakeRequest, Lawyer, MatchReason
 
 BALANCED_WEIGHTS = {
-    "expertise_fit": 0.30,
+    "expertise_fit": 0.25,
     "trust_verification": 0.20,
     "quality_outcomes": 0.20,
     "responsiveness": 0.15,
-    "price_fit": 0.10,
+    "price_fit": 0.05,
     "availability": 0.05,
+    "distance_proximity": 0.05,
+    "community_contribution": 0.05,
 }
 
 DISCLAIMER = (
@@ -94,6 +96,16 @@ def _normalize(value: float, floor: float, ceiling: float) -> float:
     return ((value - floor) / (ceiling - floor)) * 100
 
 
+def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    import math
+    R = 6371.0 # Earth radius in kilometers
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
+
+
 async def _build_component_scores(lawyer: Lawyer, intake: IntakeRequest, category: str) -> Dict[str, float]:
     expertise_fit = 100.0 if category == "general" or category in lawyer.practice_areas else 30.0
     trust_verification = 60.0
@@ -137,6 +149,18 @@ async def _build_component_scores(lawyer: Lawyer, intake: IntakeRequest, categor
     }[intake.urgency.value]
     availability = max(15.0, 100.0 - _normalize(lawyer.avg_response_hours, urgency_factor, 48))
 
+    distance_proximity = 0.0
+    if intake.client_latitude is not None and intake.client_longitude is not None and lawyer.latitude is not None and lawyer.longitude is not None:
+        dist_km = calculate_distance(intake.client_latitude, intake.client_longitude, lawyer.latitude, lawyer.longitude)
+        if dist_km <= 10.0:
+            distance_proximity = 100.0
+        elif dist_km <= 50.0:
+            distance_proximity = 100.0 - ((dist_km - 10.0) / 40.0) * 100.0
+    elif intake.client_latitude is None and intake.client_longitude is None:
+        distance_proximity = 50.0
+
+    community_contribution = min(100.0, lawyer.knowledge_contribution_score * 5.0)
+
     return {
         "expertise_fit": round(expertise_fit, 2),
         "trust_verification": round(trust_verification, 2),
@@ -144,6 +168,8 @@ async def _build_component_scores(lawyer: Lawyer, intake: IntakeRequest, categor
         "responsiveness": round(responsiveness, 2),
         "price_fit": round(price_fit, 2),
         "availability": round(availability, 2),
+        "distance_proximity": round(distance_proximity, 2),
+        "community_contribution": round(community_contribution, 2),
     }
 
 
@@ -154,11 +180,15 @@ def _total_score(components: Dict[str, float]) -> float:
     return round(score, 2)
 
 
-def _build_reasons(lawyer: Lawyer, category: str, score: float) -> List[MatchReason]:
+def _build_reasons(lawyer: Lawyer, category: str, score: float, components: Dict[str, float]) -> List[MatchReason]:
     reasons = []
     if category in lawyer.practice_areas or category == "general":
         reasons.append(MatchReason(label="Practice match", value=category.replace("_", " ").title()))
     reasons.append(MatchReason(label="Verification", value="NIN + NBA verified"))
+    if components.get("distance_proximity", 0) > 80:
+        reasons.append(MatchReason(label="Location", value="Close proximity"))
+    if components.get("community_contribution", 0) > 50:
+        reasons.append(MatchReason(label="Community", value="Top Contributor"))
     reasons.append(MatchReason(label="Response time", value=f"~{lawyer.avg_response_hours:.1f}h average"))
     reasons.append(MatchReason(label="Client rating", value=f"{lawyer.rating:.1f}/5"))
     reasons.append(MatchReason(label="Platform score", value=f"{score}"))
@@ -257,7 +287,7 @@ async def rank_lawyers(intake: IntakeRequest, lawyers: List[Lawyer], top_n: int 
                 "score": total,
                 "price_ngn": 0 if is_pro_bono_match else lawyer.base_consult_fee_ngn,
                 "price_display": "Pro Bono (Free)" if is_pro_bono_match else lawyer.price_display,
-                "why_recommended": _build_reasons(lawyer, category, total),
+                "why_recommended": _build_reasons(lawyer, category, total, _),
                 "badges": badges,
             }
         )

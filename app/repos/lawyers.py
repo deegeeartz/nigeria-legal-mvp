@@ -13,7 +13,7 @@ from app.repos.connection import (
     decrypt_pii,
 )
 from app.models import Lawyer
-from app.data import SEED_LAWYERS
+from app.data import SEED_LAWYERS, SEED_TEMPLATES
 
 
 def _safe_get(row: Any, key: str, default: Any = None) -> Any:
@@ -60,6 +60,9 @@ def row_to_lawyer(row: Any) -> Lawyer:
         bar_chapter=_safe_get(row, "bar_chapter"),
         pro_bono_practice_areas=_deserialize_practice_areas(_safe_get(row, "pro_bono_practice_areas", "")) or None,
         profile_picture_url=_safe_get(row, "profile_picture_url"),
+        knowledge_contribution_score=_safe_get(row, "knowledge_contribution_score", 0.0),
+        latitude=_safe_get(row, "latitude"),
+        longitude=_safe_get(row, "longitude"),
     )
 
 
@@ -79,8 +82,8 @@ async def seed_lawyers_if_empty() -> None:
                     bvn_verified, profile_completeness, completed_matters, rating, response_rate,
                     avg_response_hours, repeat_client_rate, base_consult_fee_ngn, active_complaints, severe_flag,
                     enrollment_number, verification_document_id, is_san, court_admissions, legal_system, bvn, nin,
-                    pro_bono_practice_areas
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    pro_bono_practice_areas, knowledge_contribution_score, latitude, longitude
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     lawyer.id,
@@ -108,8 +111,25 @@ async def seed_lawyers_if_empty() -> None:
                     encrypt_pii(lawyer.bvn),
                     encrypt_pii(lawyer.nin),
                     _serialize_practice_areas(lawyer.pro_bono_practice_areas) if lawyer.pro_bono_practice_areas else "",
+                    lawyer.knowledge_contribution_score,
+                    lawyer.latitude,
+                    lawyer.longitude,
                 ),
             )
+            
+        # Seed templates
+        res = await conn.execute("SELECT COUNT(*) AS total FROM document_templates")
+        template_count = res.fetchone()["total"]
+        if template_count == 0:
+            for template in SEED_TEMPLATES:
+                await conn.execute(
+                    """
+                    INSERT INTO document_templates (name, description, category, price_ngn)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (template["name"], template["description"], template["category"], template["price_ngn"])
+                )
+
         await conn.commit()
 
 
@@ -156,7 +176,10 @@ async def save_lawyer(lawyer: Lawyer) -> None:
                 court_admissions = ?,
                 legal_system = ?,
                 bvn = ?,
-                pro_bono_practice_areas = ?
+                pro_bono_practice_areas = ?,
+                knowledge_contribution_score = ?,
+                latitude = ?,
+                longitude = ?
             WHERE id = ?
             """,
             (
@@ -185,6 +208,9 @@ async def save_lawyer(lawyer: Lawyer) -> None:
                 lawyer.legal_system,
                 encrypt_pii(lawyer.bvn),
                 _serialize_practice_areas(lawyer.pro_bono_practice_areas) if lawyer.pro_bono_practice_areas else "",
+                lawyer.knowledge_contribution_score,
+                lawyer.latitude,
+                lawyer.longitude,
                 lawyer.id,
             ),
         )
