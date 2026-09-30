@@ -1,5 +1,15 @@
 # Nigeria Legal Marketplace - Full Implementation Plan
 
+## Project Vision: Legalle-e (The Justice Gateway Initiative)
+
+Legalle-e is a civic-driven technology platform designed to democratize access to justice in Nigeria. For many citizens, navigating the legal system is intimidating, opaque, and highly inaccessible. Legalle-e bridges this gap by offering a secure, centralized digital hub where individuals can safely articulate their legal issues through a problem-first intake system and connect with strictly verified legal practitioners for value-driven consultations. 
+
+To further promote legal literacy and community empowerment, the platform features a dedicated Knowledge Hub. Here, verified legal professionals can share educational content, insights, and answers to common legal questions, providing the public with free, reliable legal information. 
+
+Beyond initial legal guidance and education, Legalle-e functions as an end-to-end case management system. It empowers lawyers with modern tools to manage their workflows efficiently, while providing citizens with unprecedented transparency into the lifecycle and progress of their legal matters. By combining rigorous professional verification (NIN and NBA integration), secure escrow-backed financial interactions, open educational resources, and transparent case tracking, Legalle-e fosters institutional trust and modernizes the delivery of legal solutions across the continent.
+
+---
+
 This plan details the step-by-step execution of the prioritized recommendations from the codebase audit, covering all 10 priority items. It also establishes a tracking mechanism to monitor progress in real-time.
 
 ## User Review Required
