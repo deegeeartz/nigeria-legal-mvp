@@ -1,0 +1,6 @@
+{
+  "name": "Wigally",
+  "description": "Wigally - Verified legal services, consultations, document templates, lawyer directory, and compliance portal in Nigeria",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
