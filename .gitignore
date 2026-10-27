@@ -1,13 +1,30 @@
+# Next.js & Node
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# Python & Caches
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
-.env
-.env.*
 *.db
 *.sqlite
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Storage & Uploads
 storage/uploads/*
 !storage/uploads/.gitkeep
+
+# IDEs & System
 .vscode/
 .idea/
 *.log
+.DS_Store
+Thumbs.db
