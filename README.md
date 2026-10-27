@@ -1,484 +1,78 @@
-# Nigeria Legal Marketplace MVP
+# Wigally — Nigerian Legal Marketplace & Case Platform
 
-A FastAPI MVP implementing the agreed Nigeria-first legal matching strategy:
+Wigally is a civic-driven legal technology platform designed to democratize access to justice in Nigeria. It connects citizens with verified Nigerian legal practitioners through a problem-first intake system, Rule 10-compliant escrow transactions, an active legal deliberation lounge, peer-reviewed legal articles, and a comprehensive litigation docket management system.
 
-- Problem-first intake (Option B)
-- Balanced ranking model
-- Adaptive new-lawyer exposure bands (`25/20/15/10`)
-- Verification guardrails (`NIN`, `NBA`; `BVN` optional for payouts)
-- Explainable match reasons and legal disclaimer
+---
 
-## Features
+## 🚀 Key Modules & Capabilities
 
-- `POST /api/auth/signup`:
-  - Registers a user and returns a session token
-  - For `role=lawyer`, supports optional `lawyer_id` linkage to a seeded lawyer profile
-  - Enforces password complexity (uppercase + lowercase + number + special character)
-- `POST /api/auth/login`:
-  - Authenticates user and returns `access_token` + `refresh_token`
-  - Applies short-window failed-attempt rate limiting per email
-- `POST /api/auth/refresh`:
-  - Rotates refresh token and issues new access/refresh token pair
-  - Applies short-window failed-attempt rate limiting per refresh token
-- `POST /api/auth/logout`:
-  - Revokes active session using access and/or refresh token
-- `GET /api/auth/me`:
-  - Returns current user profile (`X-Auth-Token` access token required)
-- `POST /api/intake/match`:
-  - Classifies intake text to legal category
-  - Matches lawyers with weighted balanced scoring:
-    - expertise fit: 30%
-    - trust verification: 20%
-    - quality outcomes: 20%
-    - responsiveness: 15%
-    - price-fit: 10%
-    - availability: 5%
-  - Applies quota-based new-lawyer rotation using adaptive exposure band
-  - Returns top reasons (`why_recommended`) for transparency
-- `GET /api/lawyers/{lawyer_id}`:
-  - Returns contextual profile stats and verification state
-- `POST /api/complaints`:
-  - Files a complaint and applies hybrid trigger logic (`minor|major|severe`) (`X-Auth-Token` required)
-- `GET /api/complaints/{lawyer_id}`:
-  - Lists complaints for a lawyer
-- `POST /api/complaints/{complaint_id}/resolve`:
-  - Resolves a complaint (`uphold|reject`) and recalculates trust flags (admin-only)
-- `POST /api/kyc/verify`:
-  - Admin-only endpoint to update lawyer verification status
-- `GET /api/kyc/{lawyer_id}`:
-  - Returns latest lawyer KYC status (`X-Auth-Token` required)
-- `GET /api/tracker`:
-  - Returns implementation tracker JSON (`X-Auth-Token` required)
-- `GET /api/audit-events`:
-  - Admin-only audit trail feed for sensitive actions (`limit` query supported)
-- `GET /api/notifications`:
-  - Lists in-app notifications for the authenticated user
-- `POST /api/notifications/{notification_id}/read`:
-  - Marks a notification as read for the authenticated user
-- `POST /api/conversations`:
-  - Client starts a chat with a lawyer using an initial message
-- `GET /api/conversations/{conversation_id}`:
-  - Returns conversation metadata for authorized participants
-- `POST /api/conversations/{conversation_id}/messages`:
-  - Sends a message in an authorized conversation
-- `GET /api/conversations/{conversation_id}/messages`:
-  - Lists conversation messages in order
-- `POST /api/consultations`:
-  - Client books a consultation with a lawyer
-- `GET /api/consultations/{consultation_id}`:
-  - Returns consultation details for authorized participants
-- `POST /api/consultations/{consultation_id}/documents`:
-  - Uploads a supporting document for an authorized consultation participant
-- `GET /api/consultations/{consultation_id}/documents`:
-  - Lists consultation documents for an authorized participant
-- `GET /api/documents/{document_id}/download`:
-  - Downloads a stored document for an authorized consultation participant
-- `POST /api/payments/paystack/initialize`:
-  - Initializes a Paystack-style simulated payment (reference, access code, checkout URL)
-- `POST /api/payments/paystack/{reference}/verify`:
-  - Simulates Paystack verification result (`success|failed`) for a payment reference
-- `POST /api/payments/simulate`:
-  - Backward-compatible alias to initialize Paystack-style simulation
-- `POST /api/payments/{payment_id}/simulate`:
-  - Simulates internal transitions (`complete|fail|release`) for workflow testing
-- `GET /health`
+### 1. Problem-First Intake & Intelligent Matching (`/search`)
+- Classifies citizen legal problems into specialized practice areas (CAMA 2020 Corporate, Tenancy & Property, Labour & Industrial, Civil Rights, Family).
+- Weighted ranking engine incorporating NBA verification, Supreme Court Enrollment Number (SCN), practice seals, responsiveness, and price fit.
+- LocalStorage offline caching for resilient client-side search even in low-bandwidth conditions.
 
-## Project structure
+### 2. Litigation Docket & Case Manager (`/dashboard` - Lawyer View)
+- Tracks active matters across Nigerian courts (Federal High Court, National Industrial Court, Court of Appeal, etc.).
+- Manages case stages (Originating Summons, Written Addresses, Cross-Examination).
+- Tracks retainer financials (agreed fees vs. escrow held) and automated hearing adjournment notes.
 
-- `app/main.py` - API routes
-- `app/models.py` - request/response/domain models
-- `app/data.py` - in-memory seed lawyer data
-- `app/ranking.py` - matching, scoring, tiers, and fairness logic
-- `app/db.py` - PostgreSQL persistence, seeding, complaint storage
-- `app/complaints.py` - complaint severity and trigger rules
-- `tests/test_api.py` - endpoint tests
-- `tests/test_ranking.py` - ranking and policy tests
-- `tests/test_complaints.py` - complaint trigger and DB tests
-- `tests/test_auth_kyc_tracker.py` - auth, role guards, KYC, tracker API tests
-- `tests/test_workflows.py` - chat, consultation, payment simulation, and document access tests
-- `tests/test_audit_notifications.py` - audit feed, notification flow, and Paystack simulation tests
-- `storage/uploads` - local document storage used by the MVP
-- `run.py` - local dev runner
+### 3. Legal Pulse & Publishing Platform (`/articles`, `/articles/[id]`)
+- LinkedIn-style thought leadership network for Nigerian legal practitioners.
+- Rich legal jurisprudence content referencing CAMA 2020, Supreme Court precedents (*Longe v. First Bank of Nigeria*), Labour Act, and FIRS tax guidelines.
+- Modal article writer with read-time estimation, topic tagging, and outside network sharing analytics.
 
-## Setup
+### 4. Legal Lounge Community (`/community`)
+- Text-based deliberation forum for public legal queries and peer exchange.
+- Featured Counsel Text AMAs with active practitioners.
+- Dilemma Polls with live voting distribution across community questions.
+- Nigerian Legal Survival Playbooks (e.g. Police Stop Rights, Tenancy Eviction Notices).
 
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
+### 5. Regulatory Compliance & Verification
+- **Lawyer KYC (`/kyc`)**: SCN enrollment number submission, Call-to-Bar certificate upload, and NIMC NIN verification.
+- **Annual Practice Seal & Stamp (`/lawyer/seal`)**: BPF payment verification, CPD points logging, and digital stamp record management.
+- **NDPA Audit Ledger (`/admin/audit`)**: Real-time immutable event log tracking all sensitive actions, payments, and document accesses.
 
-### Pilot environment file
+### 6. Escrow & Consultation Engine
+- Automated escrow state machine (initialized ➔ verified ➔ released) complying with NBA Rule 10 client account regulations.
+- Paystack payment initialization and verification handlers.
+- Consultations feature confidential case messaging and document reviews (with video conferencing designated as on-hold).
 
-Use `.env.example` as the baseline for pilot settings.
+---
 
-Key variables:
+## 🛠️ Tech Stack
 
-- `APP_UPLOADS_DIR`
-- `DATABASE_URL`
-- `ACCESS_TOKEN_TTL_MINUTES`
-- `REFRESH_TOKEN_TTL_DAYS`
-- `PASSWORD_HASH_ITERATIONS`
-- `AUTH_RATE_LIMIT_WINDOW_SECONDS`
-- `LOGIN_FAILURE_LIMIT`
-- `REFRESH_FAILURE_LIMIT`
-- `LOG_LEVEL`
-- `SLOW_REQUEST_MS`
-- `ENABLE_REQUEST_LOGGING`
+- **Framework**: Next.js 16 (App Router)
+- **UI & Styling**: React 19, Tailwind CSS v4, Lucide Icons, Framer Motion
+- **Data Layer**: In-memory state store with `globalThis` runtime caches (`src/lib/mockDb.js`, `src/lib/caseData.js`, `src/lib/articleData.js`, `src/lib/communityData.js`)
+- **PWA**: `@ducanh2912/next-pwa` with service workers and web manifest
+- **Authentication**: Session provider (`src/lib/auth.js`) supporting credential login, one-click Google Sign-In, and instant role toggling
 
-Email provider variables:
+---
 
-- `EMAIL_PROVIDER` (`smtp` or `sendpulse`)
-- `SMTP_HOST`
-- `SMTP_PORT`
-- `SMTP_USER`
-- `SMTP_PASSWORD`
-- `SMTP_FROM_EMAIL`
-- `SENDPULSE_API_BASE_URL` (default: `https://api.sendpulse.com`)
-- `SENDPULSE_CLIENT_ID`
-- `SENDPULSE_CLIENT_SECRET`
-- `SENDPULSE_FROM_EMAIL`
-- `SENDPULSE_FROM_NAME`
-
-SendPulse example:
-
-```env
-EMAIL_PROVIDER=sendpulse
-SENDPULSE_CLIENT_ID=your_sendpulse_client_id
-SENDPULSE_CLIENT_SECRET=your_sendpulse_client_secret
-SENDPULSE_FROM_EMAIL=noreply@yourdomain.com
-SENDPULSE_FROM_NAME=Nigeria Legal MVP
-```
-
-PostgreSQL readiness variables:
-
-- `POSTGRES_HOST`
-- `POSTGRES_PORT`
-- `POSTGRES_DB`
-- `POSTGRES_USER`
-- `POSTGRES_PASSWORD`
-
-## Run
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-python run.py
-```
-
-## Containerized Development (Docker)
-
-Use Docker Compose to run both backend and frontend with hot reload while continuing to edit local files.
+## 🏃 Getting Started
 
 ### Prerequisites
+- Node.js 18+ (tested on Node v22)
+- npm 10+
 
-- Docker Desktop (with Compose support)
+### Installation & Development
+```bash
+# Install dependencies
+npm install
 
-### Start all services
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-docker compose up --build
+# Start development server
+npm run dev
 ```
 
-### Access apps
+Visit `http://localhost:3000` to access the application.
 
-- Frontend: `http://localhost:3000`
-- Backend API: `http://localhost:8000`
-- Backend docs: `http://localhost:8000/docs`
+---
 
-### Continue coding while containers run
+## 🔑 Demo Access
 
-- Edit files locally in your workspace as usual.
-- Backend reloads automatically via `uvicorn --reload`.
-- Frontend reloads automatically via Next.js dev server.
+See [`DEMO_CREDENTIALS.txt`](./DEMO_CREDENTIALS.txt) for ready-to-use accounts:
+- **Verified Counsel**: `amaka@example.com` (Lawyer View)
+- **Client User**: `client@example.com` (Client View)
+- **System Admin**: `admin@example.com` (Audit & KYC Oversight)
 
-### Useful commands
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-docker compose ps
-docker compose logs -f api
-docker compose logs -f frontend
-docker compose exec api pytest -q
-docker compose exec frontend npm run lint
-docker compose down
-```
-
-### Run development stack with PostgreSQL sidecar (migration mode)
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-docker compose -f docker-compose.yml -f docker-compose.postgres.yml up --build -d
-docker compose -f docker-compose.yml -f docker-compose.postgres.yml --profile migration run --rm migrate
-.\scripts\container_migration_smoke.ps1 -ApiUrl "http://127.0.0.1:8000"
-```
-
-Notes:
-
-- API runtime is PostgreSQL and requires a valid `DATABASE_URL`.
-- Run schema migration before starting API in new environments.
-
-### Container notes
-
-- Compose mounts your source into containers, so code changes are immediate.
-- The frontend service uses `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000`.
-- The backend uses PostgreSQL via `DATABASE_URL` and stores files in `/app/storage/uploads`.
-
-## Containerized Production-Like Run
-
-Use the production compose file to run closer to deployment behavior (no bind mounts, no dev reload server).
-
-### Start production-like stack
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-docker compose -f docker-compose.prod.yml up --build -d
-```
-
-### Stop production-like stack
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-docker compose -f docker-compose.prod.yml down
-```
-
-### Production-like notes
-
-- Backend image: `Dockerfile.backend.prod` (non-root user, no `--reload`).
-- Frontend image: `frontend/Dockerfile.prod` (multi-stage Next.js build + `next start`).
-- Persistent Docker volumes are used for backend data/uploads:
-  - `api_data`
-  - `api_uploads`
-
-### Working on code while containerized
-
-- For daily development, use `docker-compose.yml` (dev mode, live reload).
-- For deployment checks, use `docker-compose.prod.yml` (production-like runtime).
-
-## Test
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-pytest -q
-```
-
-## Deployment Pipeline (Pilot)
-
-Use these deployment assets:
-
-- `docs/deployment-runbook.md`
-- `docs/rollback-checklist.md`
-- `scripts/smoke_test.ps1`
-- `scripts/uat_runner.py`
-- `docs/uat-scenarios.md`
-
-### Pilot deploy sequence
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-pip install -r requirements.txt
-docker compose -f docker-compose.postgres.yml up -d
-alembic upgrade head
-pytest -q
-python run.py
-```
-
-In another terminal after startup:
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-.\scripts\smoke_test.ps1 -BaseUrl "http://127.0.0.1:8000"
-```
-
-Optional full UAT run:
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-c:/python313/python.exe scripts/uat_runner.py --base-url http://127.0.0.1:8000
-```
-
-## Quick auth example
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-
-# login as seeded admin
-$login = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/auth/login -ContentType "application/json" -Body '{"email":"admin@legalmvp.local","password":"AdminPass123!"}'
-$access = $login.access_token
-$refresh = $login.refresh_token
-
-# read tracker with auth
-Invoke-RestMethod -Method Get -Uri http://127.0.0.1:8000/api/tracker -Headers @{"X-Auth-Token"=$access}
-
-# rotate tokens
-$rotated = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/auth/refresh -ContentType "application/json" -Body (@{refresh_token=$refresh} | ConvertTo-Json)
-
-# logout and revoke
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/auth/logout -Headers @{"X-Auth-Token"=$rotated.access_token} -ContentType "application/json" -Body (@{refresh_token=$rotated.refresh_token} | ConvertTo-Json)
-```
-
-## Notes
-
-- This MVP now uses PostgreSQL with startup seeding from `app/data.py`.
-- The badge/tier guardrail is enforced in responses:
-  - "Ranking reflects platform performance and verification signals. It is not an official NBA or government ranking."
-- Consultation documents are stored in `storage/uploads` and are limited to 10MB per file.
-- Consultation document access is restricted to the owning client, assigned lawyer, or admin.
-- Sensitive actions are captured in audit events and accessible through `GET /api/audit-events` (admin-only).
-- Payment flow now uses a Paystack-style simulation contract (`initialize` + `verify`) while keeping simulation safety for MVP.
-- **External Integrations Note**: External APIs for Monnify (high-value payments), Dojah/Smile Identity (NIN verification), and video consultations (WebRTC) are currently simulated or scaffolded, and marked for Phase 5 production integration.
-
-## PostgreSQL Operations
-
-Use PostgreSQL in all environments (local, staging, production-like).
-
-### Recommended guardrails
-
-- Run `alembic upgrade head` before API startup in new environments.
-- Keep regular PostgreSQL backups (for example, scheduled `pg_dump` jobs).
-- Monitor write-heavy operations (`messages`, `payments`, `notifications`) for latency spikes.
-- Keep `APP_UPLOADS_DIR` backups aligned with database backup snapshots.
-
-### Auth lockout recovery
-
-If users hit repeated auth `429` responses during pilot, follow `docs/pilot-auth-recovery-runbook.md`.
-
-### Observability baseline
-
-- Request logs are emitted as JSON lines with `event`, `request_id`, `path`, `status_code`, and `duration_ms`.
-- Slow requests are flagged when `duration_ms >= SLOW_REQUEST_MS`.
-- Unhandled request exceptions are logged as `event=request_error`.
-- Use `docs/pilot-alert-checklist.md` for lightweight pilot alerting and operator response.
-
-## PostgreSQL Baseline
-
-Migration from SQLite is now complete for runtime. Use `docs/postgres-setup.md` as the baseline setup runbook.
-
-## PostgreSQL Readiness
-
-PostgreSQL tooling is now scaffolded for schema management, local provisioning, and runtime configuration via `DATABASE_URL`.
-
-Included assets:
-
-- `app/settings.py`
-- `alembic.ini`
-- `alembic/env.py`
-- `alembic/versions/20260420_0001_initial_schema.py`
-- `docker-compose.postgres.yml`
-- `scripts/postgres_smoke.py`
-- `docs/postgres-setup.md`
-
-### Start local PostgreSQL
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-docker compose -f docker-compose.postgres.yml up -d
-```
-
-### Set PostgreSQL connection URL
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-$env:DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/nigeria_legal_mvp"
-```
-
-### Run schema migration against PostgreSQL
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-alembic upgrade head
-```
-
-### Switch API runtime to PostgreSQL
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-$env:DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/nigeria_legal_mvp"
-python run.py
-```
-
-If startup reports missing PostgreSQL schema tables, run migrations and retry startup:
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-alembic upgrade head
-python run.py
-```
-
-### Verify PostgreSQL connectivity
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-c:/python313/python.exe scripts/postgres_smoke.py
-```
-
-See `docs/postgres-setup.md` for the step-by-step workflow and current limitation notes.
-
-## Implementation Tracker
-
-The project now includes a live tracker in `implementation_tracker.json` and a utility script in `tracker.py`.
-There is also a running implementation history in `IMPLEMENTATION_LOG.md`.
-
-### List tracker status
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-c:/python313/python.exe tracker.py list
-```
-
-### Update a feature/task status
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-c:/python313/python.exe tracker.py update task-005 in-progress --note "Started trigger thresholds"
-```
-
-### Add a new task to a phase
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-c:/python313/python.exe tracker.py add-task phase-1 "Implement persistence repository" --owner copilot
-```
-
-### Log a decision (for future context)
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-c:/python313/python.exe tracker.py log-decision "Exposure policy" "Keep adaptive 25/20/15/10" --context "Need fairness for new lawyers" --impact "Better discovery without quality drop" --owner product
-```
-
-### Log session notes (timeline)
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-c:/python313/python.exe tracker.py log-note "Implemented complaint trigger matrix draft" --refs task-005 feat-005
-```
-
-### Append to implementation log
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-c:/python313/python.exe tracker.py log-implementation "Pilot readiness checkpoint" --summary "Completed pilot hardening and operations baseline" --implemented "Security hardening complete" "Observability baseline added" --validation "pytest suites passing" --refs task-013 task-014 task-015
-```
-
-### Set project context (persistent handoff summary)
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-c:/python313/python.exe tracker.py set-context "Nigeria-first legal marketplace focused on trust, explainable ranking, and payment safety"
-```
-
-### Print handoff view (best for continuity)
-
-```powershell
-cd C:\Users\PC\Desktop\nigeria-legal-mvp
-c:/python313/python.exe tracker.py handoff
-```
-
-### Recommended cadence
-
-- Start each session with `tracker.py handoff`
-- After each meaningful change, run `tracker.py log-note ...`
-- When direction changes, run `tracker.py log-decision ...`
-- Keep one active task as `in-progress` and close it with `tracker.py update ...`
+You can also use the role toggle in the Dashboard header to switch between Lawyer and Client views instantly.
