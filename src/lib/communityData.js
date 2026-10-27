@@ -52,11 +52,12 @@ export const LIVE_AMAS = [
     },
     topic: "Vesting schedules, CAC post-incorporation filings, and resolving dead equity",
     status: "live", // "live" | "scheduled" | "concluded"
-    listeners_count: 54,
-    lawyers_in_room: 4,
+    participants_count: 54,
+    lawyers_in_thread: 4,
     current_question: "What happens if a co-founder leaves 3 months after CAC registration?",
     answers_count: 12,
-    badge: "🔴 LIVE LOUNGE"
+    badge: "💬 OPEN TEXT FORUM",
+    format_note: "Text Discussion Forum Only"
   },
   {
     id: "ama_002",
@@ -71,9 +72,10 @@ export const LIVE_AMAS = [
     topic: "Phone searches, road checkpoints, and fundamental enforcement remedies",
     status: "scheduled",
     scheduled_time: "Tomorrow @ 5:00 PM WAT",
-    listeners_count: 142,
-    lawyers_in_room: 6,
-    badge: "🗓️ UPCOMING AMA"
+    participants_count: 142,
+    lawyers_in_thread: 6,
+    badge: "🗓️ UPCOMING TEXT Q&A",
+    format_note: "Text Discussion Forum Only"
   }
 ];
 

@@ -1,74 +1,55 @@
-# Wigally Creative & Social Community Experience Plan
+# Wigally: Legal Lounge & Platform Refinements Plan
 
-Transform Wigally from a standard legal directory into a high-retention, warm editorial social legal lounge where everyday citizens and verified lawyers connect, deliberate, and return daily.
-
----
-
-## 1. User Review Required
-
-> [!IMPORTANT]
-> **Key Decisions Aligned with Your Preferences:**
-> - **Visual Language:** Warm editorial aesthetic inspired by vintage legal libraries and modern literary magazines — warm parchment backgrounds (`#FAF7F2`), deep espresso text (`#1C1917`), cognac amber (`#D97706`) and forest sage accents (`#047857`), editorial serif typography paired with clean modern sans, and rich tactile cards without generic cookie-cutter pills.
-> - **Community Lounge Dynamics:** Interactive Legal AMAs (scheduled and live Q&A sessions with verified lawyers), instant community polls with live breakdown statistics, and multi-faceted reaction badges (`⚖️ Legally Sound`, `💡 Life Saver`, `🔍 Clarifying Question`, `🔥 Hot Debate`).
-> - **Daily Retention Engine:** A "Daily Quick Take" card carousel with bite-sized legal insights, alongside an interactive "Legal Survival Playbook" library (e.g., *Tenant Eviction Defense*, *Freelancer Non-Payment Kit*, *Startup Equity Split*) featuring bookmarking and progress tracking.
+## Overview
+Implemented key architectural and UX directives:
+1. **Intuitive Login & Sign Up Positioning**: Unauthenticated visitors are guided intuitively with prominent header & mobile bottom tab bar entries, dual-tab switchers at the top of `/login` and `/signup` (with role guidance for Client vs Lawyer), and non-intrusive guest invitation banners in `/community`.
+2. **Text-Based Chat Discussions Forum**: The Legal Lounge (`/community`) is strictly a written deliberation forum. Live audio rooms, on-mic broadcasting, and voice conversation interfaces have been removed in favor of structured text Q&A threads and asynchronous counsel deliberations.
+3. **In-App Video Conferencing Put On Hold**: Video call triggers (including Jitsi links) have been suspended with explicit "Video Room: On Hold" designations, prioritizing secure case messaging, structured intake, and confidential document reviews.
 
 ---
 
-## 2. Proposed Changes
+## Completed Implementations
 
-### A. Theme & Editorial Design System (`/src/app/globals.css` & tokens)
-- Introduce warm editorial palette tokens:
-  - Backgrounds: `bg-[#FAF7F2]` (warm canvas), `bg-[#F4EFEB]` (editorial warm card), `bg-[#EFE8E1]` (subtle border/divider).
-  - Ink: `text-[#1C1917]` (deep espresso ink), `text-[#44403C]` (muted graphite).
-  - Accents: Cognac amber (`#B45309`), deep emerald sage (`#047857`), warm terracotta (`#C2410C`).
-- Enhanced micro-interaction classes: smooth hover elevations, stamp-like verification badges, tactile toggle switches, and serif headlines (`font-serif tracking-tight`).
+### 1. Intuitive Login & Sign Up Positioning
+- **Navigation (`/src/components/Navigation.js`)**:
+  - **Desktop**: Added dual "Sign In" and high-contrast "Join Free" action buttons with a "Not a member?" indicator.
+  - **Mobile Header**: Direct "Sign In" and "Join" actions are accessible without opening menus.
+  - **Mobile Bottom Navigation**: When not authenticated, provides an intuitive "Sign In" and "Join Free" bottom bar item so mobile visitors can access auth instantly.
+- **Login Pages (`/src/app/login/page.js` & `/src/app/login/[role]/page.js`)**:
+  - Integrated a dual-tab header at the very top: `[ Sign In (Active) ]` and `[ New Member? Sign Up ]`.
+  - Prominent "Not a member yet?" callout banner with direct role links.
+  - Intuitive role toggle (Client Portal vs Lawyer Portal) and one-click Google Sign-In.
+- **Signup Pages (`/src/app/signup/page.js` & `/src/app/signup/[role]/page.js`)**:
+  - Integrated matching dual-tab header: `[ Already a Member? Sign In ]` and `[ Create Account (Active) ]`.
+  - Existing member sign-in callout banner.
+  - Role switcher and Google Sign-Up.
+- **Community Non-Member Notice (`/src/app/community/page.js`)**:
+  - Unauthenticated guests see a welcoming banner inviting them to sign up free or sign in.
 
-### B. Interactive Community Lounge (`/src/app/community/page.js` & `/src/app/api/community/route.js`)
-- **Live Legal AMAs (Ask Me Anything):**
-  - Featured banner showcasing active or upcoming lawyer AMAs (e.g., *"Tech IP & Fair Use with Barrister Amaka"*, *"Tenant Rights Hour with Attorney David"*).
-  - Real-time "Active Lawyers in the Lounge" counter (`🟢 18 verified counsels online`).
-  - One-click "Raise Hand / Submit AMA Question".
-- **Interactive Community Vibe Polls:**
-  - Weekly legal dilemma poll (e.g., *"Can your landlord demand rent in dollars?"* or *"Can an employer read your Slack DMs?"*).
-  - Instant voting with animated vote percentages and collapsible lawyer expert breakdown commentary.
-- **Reaction Badges & Deliberation Threads:**
-  - Multi-reaction bar on every question and response: `⚖️ Legally Sound`, `💡 Life Saver`, `🔍 Need Clarity`, `🔥 Hot Debate`.
-  - Lawyer responses highlighted with gold seal borders, "Verified Counsel" ribbon, and a direct "Book Private Consult" action.
-  - Anonymous author generator with relatable personas (*"Anxious Tenant"*, *"Bootstrapped Founder"*, *"Freelance Designer"*) or user profile toggle.
+### 2. Legal Lounge: Chat & Discussions Forum Only
+- **`src/components/community/AmaBanner.js`**:
+  - Removed all live audio room artifacts (`Mic` icon, `Radio`, "on mic", "listeners count").
+  - Converted into **Featured Counsel Text AMA Forum**, highlighting active lawyers answering questions in text and allowing members to drop questions into the text thread.
+  - Explicit badge: `"Chat & Discussions Only"`.
+- **`src/app/community/page.js`**:
+  - Updated tabs to emphasize text deliberation: `"💬 Lounge Discussions"`, `"📝 Counsel Text AMAs (Text Q&A)"`, `"🗳️ Dilemma Polls"`, `"📖 Survival Playbooks"`.
+  - Added Lounge Etiquette Rule 4: *"Chat Discussions Only: All deliberations take place via written text threads. Live audio and voice conversations are not enabled."*
+- **`src/lib/communityData.js` & `src/app/page.js`**:
+  - Replaced audio terminology with text forum and Q&A discussion thread metadata.
 
-### C. Daily Retention Engine: Quick Takes & Bookmarkable Playbooks
-- **Daily Quick Take of the Day (`/src/components/community/DailyQuickTake.js`):**
-  - Interactive flip/reveal card with daily legal rights hacks: *"What to say if an officer stops you without a warrant"*, *"The 3 clauses that make a freelance contract worthless"*.
-  - Streak or "Mark as Learned" tracker saved to local storage.
-- **Interactive Legal Playbooks (`/src/components/community/PlaybookLibrary.js`):**
-  - Practical step-by-step guides with actionable checklists:
-    - *The Freelancer Non-Payment Recovery Playbook*
-    - *Tenant Rent Hike & Repair Rights Manual*
-    - *First-Time Co-Founder Equity Agreement*
-  - Interactive checkboxes, local bookmarking tab, and exportable PDF/shareable summaries.
-
-### D. Socialized Homepage & Navigation Integration
-- **Refreshed Home Page (`/src/app/page.js`):**
-  - Replace the corporate hero with an editorial magazine-style social lounge entrance:
-    - Interactive "Today in the Lounge" ticker and trending legal dilemmas.
-    - Quick-ask input with instant community preview.
-    - Featured Playbook of the week and Quick Take card directly accessible.
-- **Navigation Update (`/src/components/Navigation.js`):**
-  - Ensure `/community` route is richly accessible with live indicator badge (`🟢 AMA Live`).
-  - Add bookmarks quick-drawer or saved playbooks shortcut.
+### 3. In-App Video Conferencing Put On Hold
+- **Client & Lawyer Dashboard (`/src/app/dashboard/page.js`)**:
+  - Removed direct external video room links.
+  - Added `"Video Room: On Hold"` badge and clear notification: *"In-app video conferencing is currently on hold. Consultations proceed via confidential case chat, document reviews, and verified intake."*
+  - Prominently surfaced `"Case Chat & Docs"` as the primary consultation action.
+- **Consultation Booking Flow (`/src/app/book/[lawyerId]/page.js`)**:
+  - Added format notice: *"Consultation Format: Secure Case Chat & Document Review. In-app video conferencing is currently on hold."*
+  - Updated post-booking confirmation message.
+- **Consultation API (`/src/app/api/consultations/route.js`)**:
+  - Set `video_status: "on_hold"` and consultation channel to `"secure_case_chat_and_documents"`.
 
 ---
 
-## 3. Verification Plan
-
-### Automated Build & Syntax Checks
-- Run `compile_applet` to verify Next.js builds cleanly with zero errors.
-- Run `lint_applet` to ensure strict React 19 / Next.js / ESLint adherence.
-
-### Manual & Browser Verification
-- **Visual Design:** Verify warm editorial aesthetic, typography hierarchy, and smooth animations across desktop and mobile viewports.
-- **Interactivity:**
-  - Cast votes in community polls and verify real-time percentage updates.
-  - React with badges (`⚖️ Legally Sound`, `💡 Life Saver`) and confirm persistent count updates.
-  - Test the Daily Quick Take card flip and bookmarking a playbook to local storage.
-  - Submit an anonymous question and view it appear in the community stream with responses.
+## Verification
+- Clean build verified via `compile_applet` (Next.js production build succeeded).
+- Verified endpoints and pages with `curl` (`/community`, `/login`, `/signup`, `/api/community`).

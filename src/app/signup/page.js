@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { GoogleAuthButton } from "@/components/GoogleAuthButton";
-import { Mail, Lock, User, Loader2, AlertCircle, Briefcase, UserCheck, Scale, ArrowRight, ShieldCheck } from "lucide-react";
+import { Mail, Lock, User, Loader2, AlertCircle, Briefcase, UserCheck, Scale, ArrowRight, ShieldCheck, LogIn, UserPlus } from "lucide-react";
 
 export default function SignupPage() {
   const [role, setRole] = useState("client"); // "client" | "lawyer"
@@ -45,8 +45,27 @@ export default function SignupPage() {
   const isLawyer = role === "lawyer";
 
   return (
-    <div className="flex flex-col flex-1 items-center justify-center p-6 bg-slate-50 md:bg-white pb-24 md:pb-6">
-      <div className="w-full max-w-md bg-white md:bg-slate-50 md:shadow-xl md:border border-slate-100 rounded-3xl p-8">
+    <div className="flex flex-col flex-1 items-center justify-center p-4 sm:p-6 bg-slate-50 md:bg-white pb-24 md:pb-10">
+      <div className="w-full max-w-md bg-white md:bg-slate-50 md:shadow-xl md:border border-slate-200 rounded-3xl p-6 sm:p-8">
+        
+        {/* Intuitive Dual-Tab Header: Sign In vs Sign Up */}
+        <div className="grid grid-cols-2 p-1 bg-slate-200/90 rounded-2xl mb-6 text-xs font-bold">
+          <Link
+            href={isLawyer ? "/login/lawyer" : "/login/client"}
+            className="py-2.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-white/50 flex items-center justify-center gap-1.5 transition-colors"
+          >
+            <LogIn size={15} />
+            <span>Already a Member? Sign In</span>
+          </Link>
+          <button
+            type="button"
+            className="py-2.5 rounded-xl bg-white text-slate-900 shadow-sm flex items-center justify-center gap-1.5 cursor-default"
+          >
+            <UserPlus size={15} />
+            <span>Create Account</span>
+          </button>
+        </div>
+
         {/* Header */}
         <div className="text-center mb-6">
           <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-900 flex items-center justify-center text-amber-400 font-bold shadow-md shadow-slate-900/10 border border-slate-800 mb-3">
@@ -95,6 +114,18 @@ export default function SignupPage() {
             </div>
           </div>
         )}
+
+        {/* Existing Member Notice Banner */}
+        <div className="p-3 rounded-2xl bg-slate-100 border border-slate-200 text-slate-700 text-xs mb-6 flex items-center justify-between gap-2">
+          <span>Already registered?</span>
+          <Link
+            href={isLawyer ? "/login/lawyer" : "/login/client"}
+            className="font-bold text-slate-900 underline hover:text-indigo-700 flex items-center gap-1 shrink-0"
+          >
+            <span>Sign in to your portal</span>
+            <ArrowRight size={12} />
+          </Link>
+        </div>
 
         {error && (
           <div className="bg-rose-50 text-rose-600 p-4 rounded-xl flex items-start gap-3 mb-6 font-medium text-sm">

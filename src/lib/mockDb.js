@@ -177,7 +177,8 @@ globalThis.__MOCK_DB__ = globalThis.__MOCK_DB__ || {
       summary: "Review commercial property lease agreement in Lekki Phase 1",
       status: "booked",
       created_on: "2026-07-30T14:20:00Z",
-      video_room_url: "https://meet.jit.si/NigeriaLegalConsultation_101"
+      video_status: "on_hold",
+      channel: "secure_case_chat_and_documents"
     }
   ],
   documents: [

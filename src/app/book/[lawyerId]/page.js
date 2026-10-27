@@ -134,8 +134,11 @@ export default function BookConsultationPage() {
               </div>
               <h2 className="text-2xl font-black text-slate-900">Consultation Scheduled!</h2>
               <p className="text-sm text-slate-600 max-w-md mx-auto">
-                Your consultation request has been logged. Matter documents and secure video link are available in your client dashboard.
+                Your consultation request has been logged. Matter documents and secure case chat are available in your client dashboard.
               </p>
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 max-w-md mx-auto">
+                <strong>Consultation Channel:</strong> In-app video conferencing is currently on hold. Sessions proceed via confidential attorney-client chat and document review.
+              </div>
               <div className="pt-4">
                 <Link
                   href="/dashboard"
@@ -147,6 +150,17 @@ export default function BookConsultationPage() {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="p-8 space-y-6">
+              {/* Consultation Format Notice */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 flex items-start gap-2.5">
+                <AlertCircle size={15} className="text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-slate-900 block">Consultation Format: Secure Case Chat & Document Review</span>
+                  <span className="text-slate-500 text-[11px]">
+                    In-app video conferencing is currently on hold. Counsel will review your intake details and provide advice via confidential case messaging and document markup.
+                  </span>
+                </div>
+              </div>
+
               {/* Matter Category */}
               <div>
                 <label className="block text-xs font-bold text-slate-800 mb-1.5 uppercase tracking-wider">

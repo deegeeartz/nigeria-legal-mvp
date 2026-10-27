@@ -221,6 +221,39 @@ export default function CommunityLoungePage() {
   return (
     <div className="min-h-screen warm-parchment-pattern py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-6xl mx-auto space-y-8">
+        {/* Intuitive Non-Member Notice Banner */}
+        {!user && (
+          <div className="editorial-card p-4 sm:p-5 rounded-2xl bg-amber-50/80 border border-amber-200 flex flex-wrap items-center justify-between gap-3 text-xs text-amber-950 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-stone-900 text-amber-400 flex items-center justify-center font-bold shrink-0">
+                <Scale size={16} />
+              </div>
+              <div>
+                <span className="font-bold text-stone-900 text-xs sm:text-sm block">
+                  Not a member yet? Join Nigeria’s verified legal network.
+                </span>
+                <span className="text-stone-600 text-[11px]">
+                  Reading discussions is public. Create a free account in 30 seconds to write questions, vote in dilemma polls, or consult counsel.
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Link
+                href="/login"
+                className="px-3.5 py-1.5 rounded-xl border border-stone-300 font-bold text-stone-800 hover:bg-white transition-colors"
+              >
+                Sign In
+              </Link>
+              <Link
+                href="/signup"
+                className="px-4 py-1.5 rounded-xl bg-stone-900 text-white font-bold hover:bg-stone-800 transition-colors shadow-xs"
+              >
+                Join Free
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* Editorial Community Header */}
         <header className="editorial-card rounded-3xl p-6 sm:p-10 bg-white border border-stone-200 shadow-sm relative overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
@@ -230,7 +263,7 @@ export default function CommunityLoungePage() {
               </div>
               <div>
                 <span className="text-xs font-mono font-bold uppercase tracking-wider text-amber-900">
-                  Wigally Community Lounge
+                  Wigally Community Lounge • Text Deliberation Forum
                 </span>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block" />
@@ -256,14 +289,14 @@ export default function CommunityLoungePage() {
             Where Nigeria Deliberates Real Legal Questions.
           </h1>
           <p className="text-stone-600 text-sm sm:text-base mt-3 max-w-2xl leading-relaxed">
-            Write questions seeking legal clarity with complete anonymity or your public profile. Verified Barristers and Senior Advocates provide reasoned opinions and debate nuance.
+            Write questions seeking legal clarity with complete anonymity or your public profile. Verified Barristers and Senior Advocates provide reasoned opinions and debate nuance in dedicated text discussion threads.
           </p>
 
           {/* Social Nav Tabs */}
           <div className="mt-8 pt-5 border-t border-stone-200 flex flex-wrap gap-2">
             {[
               { id: "feed", label: "💬 Lounge Discussions", count: communityData.questions?.length },
-              { id: "amas", label: "🎙️ Live Legal AMAs", badge: "Live" },
+              { id: "amas", label: "📝 Counsel Text AMAs", badge: "Text Q&A" },
               { id: "polls", label: "🗳️ Dilemma Polls", count: communityData.polls?.length },
               { id: "playbooks", label: "📖 Survival Playbooks", count: communityData.playbooks?.length }
             ].map((tab) => (
@@ -281,7 +314,7 @@ export default function CommunityLoungePage() {
                   <span className="ml-1.5 opacity-60 font-mono text-xs">({tab.count})</span>
                 )}
                 {tab.badge && (
-                  <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] bg-rose-500 text-white font-bold uppercase tracking-wider animate-pulse">
+                  <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] bg-amber-600 text-white font-bold uppercase tracking-wider font-mono">
                     {tab.badge}
                   </span>
                 )}
@@ -290,12 +323,17 @@ export default function CommunityLoungePage() {
           </div>
         </header>
 
-        {/* Tab 1: Live AMAs Tab */}
+        {/* Tab 1: Counsel Text AMAs Tab */}
         {activeTab === "amas" && (
           <div className="space-y-6">
             <AmaBanner amas={communityData.amas} />
-            <div className="p-6 rounded-2xl bg-white border border-stone-200 text-xs text-stone-600 leading-relaxed">
-              <strong className="text-stone-900">What are Wigally Legal AMAs?</strong> Verified Nigerian legal advocates hold regular audio lounges to break down complex legislation (CAMA 2020, Lagos Tenancy, Tax Reforms, NDPA). You can drop real-time questions directly into their desk queue anonymously.
+            <div className="p-6 rounded-2xl bg-white border border-stone-200 text-xs text-stone-600 leading-relaxed space-y-2">
+              <p>
+                <strong className="text-stone-900">What are Wigally Counsel Text AMAs?</strong> Verified Nigerian legal advocates hold structured asynchronous text discussion forums to break down complex legislation (CAMA 2020, Lagos Tenancy, Tax Reforms, NDPA). You can drop real-time questions directly into their desk queue anonymously for written responses.
+              </p>
+              <p className="text-amber-800 font-medium">
+                Note: The Lounge is strictly a text-based chat discussion forum. Real-time audio rooms and voice conferencing are disabled.
+              </p>
             </div>
           </div>
         )}
@@ -611,6 +649,9 @@ export default function CommunityLoungePage() {
                 </p>
                 <p>
                   3. <strong>Verified Counsel Only:</strong> Only NBA-verified practitioners can post top-level legal opinions.
+                </p>
+                <p>
+                  4. <strong>Chat Discussions Only:</strong> All deliberations take place via written text threads. Live audio and voice conversations are not enabled.
                 </p>
               </div>
             </aside>

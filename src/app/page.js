@@ -143,7 +143,7 @@ export default function LandingPage() {
             href="/community"
             className="flex items-center gap-1.5 text-amber-400 hover:text-amber-300 font-semibold transition-colors"
           >
-            <span>Join Deliberation & AMAs</span>
+            <span>Join Text Discussions & Q&A</span>
             <ArrowRight size={13} />
           </Link>
         </div>
@@ -383,6 +383,95 @@ export default function LandingPage() {
         {/* Legal Survival Playbooks Preview */}
         <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <PlaybookLibrary playbooks={communityData.playbooks} />
+        </section>
+
+        {/* LinkedIn-Style Legal Publications Showcase */}
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-stone-200 shadow-sm space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-amber-800">
+                  Wigally Legal Pulse
+                </span>
+                <h2 className="font-editorial text-2xl sm:text-3xl font-black text-stone-900 mt-1">
+                  Peer-Reviewed Legal Publications & Thought Leadership
+                </h2>
+                <p className="text-xs sm:text-sm text-stone-500 mt-1 font-medium">
+                  Verified Nigerian lawyers publish in-depth statutory breakdowns that colleagues and clients can deliberate, applaud, bookmark, and share outside the network to LinkedIn and WhatsApp.
+                </p>
+              </div>
+              <div className="flex items-center gap-2.5 shrink-0">
+                <Link
+                  href="/articles"
+                  className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-black uppercase tracking-wider transition-all shadow-xs"
+                >
+                  Browse All Articles →
+                </Link>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div className="border border-stone-200 rounded-2xl p-5 hover:border-amber-400 transition-all flex flex-col justify-between bg-stone-50/50">
+                <div className="space-y-2.5">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900">
+                    Corporate & Startups
+                  </span>
+                  <Link href="/articles/navigating-cama-2020-directors-duties-startup-boards">
+                    <h3 className="font-black text-stone-900 text-sm font-serif hover:text-amber-900 transition-colors line-clamp-2">
+                      Navigating CAMA 2020: The Hidden Liabilities of Startup Directors in Nigeria
+                    </h3>
+                  </Link>
+                  <p className="text-xs text-stone-500 line-clamp-2 font-medium">
+                    Why informal advisory seats trigger personal civil and criminal liabilities under Sections 305 and 316.
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-stone-200 flex items-center justify-between text-xs text-stone-500">
+                  <span className="font-bold text-stone-700">Barr. Amaka Okonkwo</span>
+                  <span>142 applauds • 6 min</span>
+                </div>
+              </div>
+
+              <div className="border border-stone-200 rounded-2xl p-5 hover:border-amber-400 transition-all flex flex-col justify-between bg-stone-50/50">
+                <div className="space-y-2.5">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-900">
+                    Labour & Employment
+                  </span>
+                  <Link href="/articles/remote-work-national-industrial-court-jurisprudence">
+                    <h3 className="font-black text-stone-900 text-sm font-serif hover:text-amber-900 transition-colors line-clamp-2">
+                      The Digital Office: National Industrial Court Jurisprudence on Remote Work
+                    </h3>
+                  </Link>
+                  <p className="text-xs text-stone-500 line-clamp-2 font-medium">
+                    Analysis of cross-border employment, device privacy under NDPA 2023, and constructive dismissal.
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-stone-200 flex items-center justify-between text-xs text-stone-500">
+                  <span className="font-bold text-stone-700">Ibrahim Yusuf SAN</span>
+                  <span>215 applauds • 8 min</span>
+                </div>
+              </div>
+
+              <div className="border border-stone-200 rounded-2xl p-5 hover:border-amber-400 transition-all flex flex-col justify-between bg-stone-50/50">
+                <div className="space-y-2.5">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-900">
+                    Property & Real Estate
+                  </span>
+                  <Link href="/articles/land-use-act-governor-consent-electronic-perfection">
+                    <h3 className="font-black text-stone-900 text-sm font-serif hover:text-amber-900 transition-colors line-clamp-2">
+                      Governor's Consent in 2026: Electronic Title Perfection across Lagos & Ogun
+                    </h3>
+                  </Link>
+                  <p className="text-xs text-stone-500 line-clamp-2 font-medium">
+                    Automated chartered survey beacon searches, stamp duty assessments, and navigating e-Title registries.
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-stone-200 flex items-center justify-between text-xs text-stone-500">
+                  <span className="font-bold text-stone-700">Kemi Adegoke SAN</span>
+                  <span>184 applauds • 5 min</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
         {/* Verified Counsel Directory Spotlight (No Upfront Price Ads) */}

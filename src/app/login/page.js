@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { GoogleAuthButton } from "@/components/GoogleAuthButton";
-import { Mail, Lock, Loader2, AlertCircle, Briefcase, UserCheck, Scale, ArrowRight } from "lucide-react";
+import { Mail, Lock, Loader2, AlertCircle, Briefcase, UserCheck, Scale, ArrowRight, UserPlus, LogIn } from "lucide-react";
 
 export default function LoginPage() {
   const [role, setRole] = useState("client"); // "client" | "lawyer"
@@ -44,16 +44,35 @@ export default function LoginPage() {
   const isLawyer = role === "lawyer";
 
   return (
-    <div className="flex flex-col flex-1 items-center justify-center p-6 bg-slate-50 md:bg-white pb-24 md:pb-6">
-      <div className="w-full max-w-md bg-white md:bg-slate-50 md:shadow-xl md:border border-slate-100 rounded-3xl p-8">
+    <div className="flex flex-col flex-1 items-center justify-center p-4 sm:p-6 bg-slate-50 md:bg-white pb-24 md:pb-10">
+      <div className="w-full max-w-md bg-white md:bg-slate-50 md:shadow-xl md:border border-slate-200 rounded-3xl p-6 sm:p-8">
+        
+        {/* Intuitive Dual-Tab Header: Sign In vs Sign Up */}
+        <div className="grid grid-cols-2 p-1 bg-slate-200/90 rounded-2xl mb-6 text-xs font-bold">
+          <button
+            type="button"
+            className="py-2.5 rounded-xl bg-white text-slate-900 shadow-sm flex items-center justify-center gap-1.5 cursor-default"
+          >
+            <LogIn size={15} />
+            <span>Sign In</span>
+          </button>
+          <Link
+            href={isLawyer ? "/signup/lawyer" : "/signup/client"}
+            className="py-2.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-white/50 flex items-center justify-center gap-1.5 transition-colors"
+          >
+            <UserPlus size={15} />
+            <span>New Member? Sign Up</span>
+          </Link>
+        </div>
+
         {/* Header */}
         <div className="text-center mb-6">
           <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-900 flex items-center justify-center text-amber-400 font-bold shadow-md shadow-slate-900/10 border border-slate-800 mb-3">
             <Scale size={24} strokeWidth={2.5} />
           </div>
-          <h1 className="text-2xl font-black text-slate-900">Welcome to Wigally</h1>
+          <h1 className="text-2xl font-black text-slate-900">Sign in to Wigally</h1>
           <p className="text-slate-500 font-medium text-xs mt-1">
-            Sign in to access your verified legal services in Nigeria
+            Access your verified legal consultations, documents & case portal
           </p>
         </div>
 
@@ -81,6 +100,18 @@ export default function LoginPage() {
           >
             <Briefcase size={16} /> Lawyer Portal
           </button>
+        </div>
+
+        {/* Not a member intuitive callout banner */}
+        <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs mb-6 flex items-center justify-between gap-2">
+          <span>Not a member yet?</span>
+          <Link
+            href={isLawyer ? "/signup/lawyer" : "/signup/client"}
+            className="font-bold underline hover:text-amber-950 flex items-center gap-1 shrink-0"
+          >
+            <span>Register as {isLawyer ? "Lawyer" : "Client"}</span>
+            <ArrowRight size={12} />
+          </Link>
         </div>
 
         {error && (
@@ -194,7 +225,7 @@ export default function LoginPage() {
             href={isLawyer ? "/signup/lawyer" : "/signup/client"}
             className="font-bold text-slate-900 hover:underline inline-flex items-center gap-1"
           >
-            Sign up as {isLawyer ? "Lawyer" : "Client"} <ArrowRight size={12} />
+            Create {isLawyer ? "Lawyer" : "Client"} Account <ArrowRight size={12} />
           </Link>
         </div>
       </div>

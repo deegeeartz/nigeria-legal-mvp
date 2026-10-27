@@ -81,9 +81,26 @@ export default function RoleLoginPage() {
   }
 
   return (
-    <div className="flex flex-col flex-1 items-center justify-center p-6 bg-slate-50 md:bg-white pb-24 md:pb-6">
-      <div className="w-full max-w-md bg-white md:bg-slate-50 md:shadow-xl md:border border-slate-100 rounded-3xl p-8">
-        <div className="text-center mb-8">
+    <div className="flex flex-col flex-1 items-center justify-center p-4 sm:p-6 bg-slate-50 md:bg-white pb-24 md:pb-10">
+      <div className="w-full max-w-md bg-white md:bg-slate-50 md:shadow-xl md:border border-slate-100 rounded-3xl p-6 sm:p-8">
+        
+        {/* Intuitive Dual-Tab Header: Sign In vs Sign Up */}
+        <div className="grid grid-cols-2 p-1 bg-slate-200/90 rounded-2xl mb-6 text-xs font-bold">
+          <button
+            type="button"
+            className="py-2.5 rounded-xl bg-white text-slate-900 shadow-sm flex items-center justify-center gap-1.5 cursor-default"
+          >
+            <span>Sign In</span>
+          </button>
+          <Link
+            href={config.alternateHref}
+            className="py-2.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-white/50 flex items-center justify-center gap-1.5 transition-colors"
+          >
+            <span>Not a member? Sign Up</span>
+          </Link>
+        </div>
+
+        <div className="text-center mb-6">
           <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide mb-3 ${config.accentLabelClass}`}>
             {config.accentLabel}
           </span>

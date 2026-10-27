@@ -17,7 +17,8 @@ export async function POST(request) {
       summary: body.summary || "Legal Consultation",
       status: "pending",
       created_on: new Date().toISOString(),
-      video_room_url: `https://meet.jit.si/NigeriaLegalConsultation_${newId}`
+      video_status: "on_hold",
+      channel: "secure_case_chat_and_documents"
     };
     mockDb.consultations.unshift(newConsultation);
 
