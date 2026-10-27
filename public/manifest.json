@@ -1,26 +1,63 @@
 {
-  "name": "Wigally",
+  "id": "/",
+  "name": "Wigally | Verified Legal Services & Community",
   "short_name": "Wigally",
-  "description": "Connecting you with verified, high-quality legal professionals through transparent fees and automated KYC in Nigeria.",
+  "description": "Connecting you with verified legal professionals and collaborative legal Q&A in Nigeria.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#000000",
+  "orientation": "portrait-primary",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "categories": [
+    "business",
+    "productivity",
+    "social"
+  ],
   "icons": [
     {
       "src": "/favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
+      "sizes": "32x32",
       "type": "image/x-icon"
     },
     {
       "src": "/apple-touch-icon.png",
-      "sizes": "192x192",
+      "sizes": "180x180",
       "type": "image/png"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Community Legal Q&A",
+      "short_name": "Community",
+      "description": "Browse and ask legal advice questions anonymously or verified",
+      "url": "/community",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Find Verified Lawyers",
+      "short_name": "Find Lawyer",
+      "description": "Search verified lawyers with transparent pricing in Nigeria",
+      "url": "/search",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

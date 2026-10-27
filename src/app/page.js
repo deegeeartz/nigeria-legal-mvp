@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search,
@@ -20,14 +20,53 @@ import {
   MapPin,
   Lock,
   ArrowRight,
-  Check,
-  ShieldAlert,
-  Zap
+  Zap,
+  MessageSquare,
+  EyeOff,
+  ThumbsUp,
+  BookOpen,
+  HelpCircle,
+  Sparkles,
+  Send,
+  Radio,
+  Vote,
+  Bookmark
 } from "lucide-react";
+import { DailyQuickTake } from "@/components/community/DailyQuickTake";
+import { CommunityPoll } from "@/components/community/CommunityPoll";
+import { AmaBanner } from "@/components/community/AmaBanner";
+import { PlaybookLibrary } from "@/components/community/PlaybookLibrary";
 
 export default function LandingPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
+  const [heroTab, setHeroTab] = useState("ask"); // "ask" | "search"
+  const [quickQuestion, setQuickQuestion] = useState("");
+  const [quickCategory, setQuickCategory] = useState("Tenancy & Property");
+  const [quickAnonymous, setQuickAnonymous] = useState(true);
+  const [communityData, setCommunityData] = useState({
+    questions: [],
+    polls: [],
+    amas: [],
+    quickTakes: [],
+    playbooks: [],
+    onlineLawyersCount: 19
+  });
+
+  useEffect(() => {
+    async function loadCommunity() {
+      try {
+        const res = await fetch("/api/community");
+        if (res.ok) {
+          const data = await res.json();
+          setCommunityData(data);
+        }
+      } catch (err) {
+        console.error("Failed to load community feed:", err);
+      }
+    }
+    loadCommunity();
+  }, []);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -38,24 +77,35 @@ export default function LandingPage() {
     }
   };
 
+  const handleQuickAskSubmit = (e) => {
+    e.preventDefault();
+    if (quickQuestion.trim()) {
+      router.push(
+        `/community?ask=${encodeURIComponent(quickQuestion.trim())}&cat=${encodeURIComponent(quickCategory)}&anon=${quickAnonymous}`
+      );
+    } else {
+      router.push("/community");
+    }
+  };
+
   const practiceAreas = [
-    { name: "Corporate & Business", icon: Building2, area: "contracts" },
-    { name: "Property & Real Estate", icon: Briefcase, area: "property" },
+    { name: "Tenancy & Property", icon: Briefcase, area: "property" },
+    { name: "Startups & CAC", icon: Building2, area: "contracts" },
     { name: "Employment & Labour", icon: Users, area: "employment" },
-    { name: "Family & Estate Planning", icon: Scale, area: "family" },
-    { name: "Litigation & Disputes", icon: ShieldCheck, area: "litigation" }
+    { name: "Civil & Privacy Rights", icon: Scale, area: "litigation" },
+    { name: "Family & Estate", icon: ShieldCheck, area: "family" }
   ];
 
   const featuredLawyers = [
     {
       id: "lw_001",
       name: "Amaka Okonkwo",
-      title: "Senior Partner, Commercial Law",
-      state: "Lagos",
+      title: "Senior Partner • Commercial & Property Law",
+      state: "Lagos State",
       rating: 4.8,
       matters: 37,
-      fee: "₦45,000",
-      badges: ["NBA Verified", "Seal Valid"]
+      badges: ["NBA Verified", "Seal Valid"],
+      status: "Available for Consultation"
     },
     {
       id: "lw_002",
@@ -64,400 +114,387 @@ export default function LandingPage() {
       state: "Abuja (FCT)",
       rating: 4.9,
       matters: 52,
-      fee: "₦60,000",
-      badges: ["Senior Advocate", "Supreme Court Seal"]
+      badges: ["Senior Silk", "Supreme Court Bar"],
+      status: "Available for High Court Retainers"
     },
     {
       id: "lw_005",
       name: "Kemi Adegoke SAN",
-      title: "Employment & Industrial Specialist",
-      state: "Lagos",
+      title: "Senior Advocate & Employment Law Specialist",
+      state: "Lagos State",
       rating: 4.9,
-      matters: 71,
-      fee: "₦70,000",
-      badges: ["Senior Advocate", "NBA Verified"]
+      matters: 64,
+      badges: ["Senior Silk", "Industrial Court Arbitrator"],
+      status: "Active in Community Lounge"
     }
   ];
 
   return (
-    <div className="flex flex-col flex-1 pb-16 md:pb-0 bg-slate-50 text-slate-900">
-      {/* High-Impact Hero Section */}
-      <section className="relative overflow-hidden bg-slate-950 text-white pt-12 lg:pt-16 pb-24 border-b border-slate-800">
-        {/* Subtle Geometric Background Pattern */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(16,185,129,0.15),rgba(255,255,255,0))] pointer-events-none" />
-        <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="relative max-w-6xl mx-auto px-6">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-            
-            {/* Left Column: Headline, Description, Search, & CTAs */}
-            <div className="lg:col-span-7">
-              <motion.div
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900 border border-slate-700/80 text-amber-400 text-xs font-bold tracking-wide mb-6 shadow-sm"
-              >
-                <Award size={14} className="text-amber-400 shrink-0" />
-                <span>Nigeria's Verified Legal Services Portal</span>
-              </motion.div>
-
-              <motion.h1
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className="text-4xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-[1.1]"
-              >
-                Legal Counsel You Can <span className="text-emerald-400 underline decoration-emerald-500/40 decoration-wavy decoration-2">Trust</span>.
-              </motion.h1>
-
-              <motion.p
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15 }}
-                className="mt-5 text-base sm:text-lg text-slate-300 font-normal leading-relaxed max-w-xl"
-              >
-                Access verified Nigerian lawyers instantly. Up-front flat fees, Supreme Court enrollment check, annual Stamp & Seal compliance, and secure escrow protection on Wigally.
-              </motion.p>
-
-              {/* Search Box */}
-              <motion.form
-                onSubmit={handleSearchSubmit}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="mt-8 flex flex-col sm:flex-row gap-2.5 bg-slate-900/90 p-2 rounded-2xl border border-slate-700/80 shadow-2xl backdrop-blur-md"
-              >
-                <div className="relative flex-1 flex items-center">
-                  <Search className="absolute left-4 h-5 w-5 text-slate-400" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search by legal specialty, state, or lawyer name..."
-                    className="w-full pl-11 pr-4 py-3.5 bg-slate-950 text-white rounded-xl placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-sm sm:text-base border border-slate-800/80"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="flex items-center justify-center bg-emerald-600 hover:bg-emerald-500 text-white px-7 py-3.5 rounded-xl font-bold transition-all active:scale-95 text-sm sm:text-base shrink-0 shadow-lg shadow-emerald-600/30"
-                >
-                  Find Lawyers
-                </button>
-              </motion.form>
-
-              {/* Quick Practice Area Pills */}
-              <motion.div
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.25 }}
-                className="mt-5 flex flex-wrap gap-2 items-center"
-              >
-                <span className="text-xs font-semibold text-slate-400 mr-1">Popular:</span>
-                {practiceAreas.map((pa) => (
-                  <Link
-                    key={pa.area}
-                    href={`/search?area=${pa.area}`}
-                    className="px-3 py-1 rounded-lg bg-slate-900/90 border border-slate-800 text-slate-300 hover:text-white text-xs font-medium hover:bg-slate-800 hover:border-emerald-500/50 transition-colors"
-                  >
-                    {pa.name}
-                  </Link>
-                ))}
-              </motion.div>
-
-              {/* Role Quick Links */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="mt-8 flex flex-wrap items-center gap-4 pt-6 border-t border-slate-800/80"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span className="text-xs font-bold text-slate-300">Live Legal Portal</span>
-                </div>
-                <div className="h-4 w-px bg-slate-800 hidden sm:block" />
-                <Link
-                  href="/login"
-                  className="text-xs font-bold text-emerald-400 hover:text-emerald-300 underline underline-offset-4 flex items-center gap-1"
-                >
-                  Sign In with Google <ArrowRight size={12} />
-                </Link>
-                <Link
-                  href="/login/lawyer"
-                  className="text-xs font-bold text-slate-300 hover:text-white underline underline-offset-4 flex items-center gap-1"
-                >
-                  Lawyer Portal <ArrowRight size={12} />
-                </Link>
-                <Link
-                  href="/login/client"
-                  className="text-xs font-bold text-slate-400 hover:text-slate-200 underline underline-offset-4 flex items-center gap-1"
-                >
-                  Client Portal <ArrowRight size={12} />
-                </Link>
-              </motion.div>
-            </div>
-
-            {/* Right Column: Sleek Interactive Visual Hero Graphic Card */}
-            <div className="lg:col-span-5 relative">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.2, duration: 0.4 }}
-                className="relative rounded-3xl bg-slate-900 border border-slate-800 p-6 shadow-2xl overflow-hidden"
-              >
-                {/* Header Badge */}
-                <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-5">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-950 text-emerald-400 border border-emerald-800 flex items-center justify-center font-bold">
-                      <Scale size={20} />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-white leading-none">Wigally Legal Guarantee</h4>
-                      <p className="text-[11px] text-slate-400 mt-1">Automated Verification Engine</p>
-                    </div>
-                  </div>
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    <Zap size={12} /> Live Audit
-                  </span>
-                </div>
-
-                {/* Professional Visual Image Container */}
-                <div className="relative rounded-2xl overflow-hidden border border-slate-800 mb-5 group">
-                  <img
-                    src="https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=1200&q=80"
-                    alt="Wigally Legal Services"
-                    className="w-full h-48 object-cover object-center group-hover:scale-105 transition-transform duration-500"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
-                  
-                  <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-white text-xs font-medium">
-                    <span className="bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-800 text-[11px] font-bold text-emerald-400 flex items-center gap-1">
-                      <ShieldCheck size={13} /> SCN Roll Verified
-                    </span>
-                    <span className="bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-800 text-[11px] font-bold text-amber-400 flex items-center gap-1">
-                      <Lock size={13} /> Escrow Protected
-                    </span>
-                  </div>
-                </div>
-
-                {/* Trust Metrics */}
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800/80">
-                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Supreme Court Check</span>
-                    <span className="text-sm font-extrabold text-slate-100 flex items-center gap-1 mt-0.5">
-                      <CheckCircle2 size={14} className="text-emerald-400" /> 100% Validated
-                    </span>
-                  </div>
-                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800/80">
-                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Annual Stamp & Seal</span>
-                    <span className="text-sm font-extrabold text-slate-100 flex items-center gap-1 mt-0.5">
-                      <CheckCircle2 size={14} className="text-amber-400" /> Rule 10 Compliant
-                    </span>
-                  </div>
-                </div>
-
-                {/* Direct Action Button */}
-                <Link
-                  href="/search"
-                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs sm:text-sm text-center block transition-colors shadow-md shadow-emerald-600/20"
-                >
-                  Browse Verified Legal Practitioners
-                </Link>
-              </motion.div>
-            </div>
-
-          </div>
-        </div>
-      </section>
-
-      {/* High-Contrast Trust Pillars */}
-      <section className="-mt-8 relative z-10 px-6">
-        <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
-          {[
-            {
-              tag: "KYC & NBA Verified",
-              icon: ShieldCheck,
-              title: "100% NBA Enrollment Check",
-              desc: "Every legal practitioner on Wigally undergoes strict NIN, BVN, and Supreme Court enrollment verification.",
-              accent: "text-emerald-700 bg-emerald-50 border-emerald-200"
-            },
-            {
-              tag: "Escrow Protection",
-              icon: Lock,
-              title: "Up-Front Transparent Fees",
-              desc: "Know consultation fees in advance. Funds are held in secure escrow and released upon consultation completion.",
-              accent: "text-amber-700 bg-amber-50 border-amber-200"
-            },
-            {
-              tag: "High Legibility",
-              icon: FileText,
-              title: "Digital Document Hub",
-              desc: "Share lease drafts, corporate contracts, and court motions with high-contrast document reading and audit logs.",
-              accent: "text-slate-800 bg-slate-100 border-slate-300"
-            }
-          ].map((feature, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.1 }}
-              className="bg-white p-7 rounded-2xl shadow-xl shadow-slate-200/60 border border-slate-200/90 flex flex-col items-start hover:-translate-y-1 transition-all"
-            >
-              <div className={`p-3 rounded-xl mb-5 border ${feature.accent}`}>
-                <feature.icon strokeWidth={2.5} size={24} />
-              </div>
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">{feature.tag}</span>
-              <h3 className="text-lg font-bold text-slate-900 mb-2 leading-snug">{feature.title}</h3>
-              <p className="text-slate-600 font-normal text-sm leading-relaxed">{feature.desc}</p>
-            </motion.div>
-          ))}
-        </div>
-      </section>
-
-      {/* Featured Verified Lawyers Section */}
-      <section className="py-20 px-6 max-w-5xl mx-auto w-full">
-        <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
-          <div>
-            <span className="text-xs font-bold uppercase tracking-widest text-emerald-700">Verified Practitioners</span>
-            <h2 className="text-3xl font-black text-slate-900 mt-1">Consult Top Legal Experts</h2>
-            <p className="text-slate-600 text-sm mt-1">Available for immediate booking, document review, and litigation advisory.</p>
+    <div className="min-h-screen warm-parchment-pattern flex flex-col justify-between">
+      {/* Live Community Ticker */}
+      <div className="bg-stone-900 text-stone-300 py-2.5 px-4 text-xs border-b border-stone-800">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="font-semibold text-white">Live Legal Lounge:</span>
+            <span>{communityData.onlineLawyersCount || 19} Verified Nigerian Lawyers Active Now</span>
           </div>
           <Link
-            href="/search"
-            className="inline-flex items-center gap-1.5 text-emerald-700 hover:text-emerald-800 font-bold text-sm bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-200 self-start md:self-auto"
+            href="/community"
+            className="flex items-center gap-1.5 text-amber-400 hover:text-amber-300 font-semibold transition-colors"
           >
-            View All Lawyers
-            <ChevronRight size={16} />
+            <span>Join Deliberation & AMAs</span>
+            <ArrowRight size={13} />
           </Link>
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {featuredLawyers.map((lawyer) => (
-            <div
-              key={lawyer.id}
-              className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex items-start justify-between gap-2 mb-3">
-                  <div className="w-12 h-12 rounded-full bg-slate-900 text-amber-400 font-black flex items-center justify-center text-lg shadow-sm border border-slate-800">
-                    {lawyer.name.charAt(0)}
-                  </div>
-                  <div className="flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-full text-xs font-bold">
-                    <Star size={12} className="fill-amber-500 text-amber-500" />
-                    {lawyer.rating}
-                  </div>
-                </div>
-
-                <h3 className="font-black text-slate-900 text-lg">{lawyer.name}</h3>
-                <p className="text-xs font-medium text-slate-500 mt-0.5">{lawyer.title}</p>
-
-                <div className="flex items-center gap-1 text-xs text-slate-600 mt-2 font-medium">
-                  <MapPin size={14} className="text-slate-400" />
-                  {lawyer.state}
-                </div>
-
-                <div className="flex flex-wrap gap-1.5 mt-4">
-                  {lawyer.badges.map((b, idx) => (
-                    <span
-                      key={idx}
-                      className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200"
-                    >
-                      <CheckCircle2 size={12} className="text-emerald-600" />
-                      {b}
-                    </span>
-                  ))}
-                </div>
+      <main className="space-y-16 pb-20">
+        {/* Warm Editorial Hero Section */}
+        <section className="relative overflow-hidden pt-12 pb-16 px-4 sm:px-6 lg:px-8 border-b border-stone-200 bg-gradient-to-b from-stone-100/60 to-transparent">
+          <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+            {/* Left Hero Column */}
+            <div className="lg:col-span-7 space-y-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-100/70 border border-amber-300/60 text-amber-900 text-xs font-semibold">
+                <Sparkles size={14} className="text-amber-700" />
+                <span>Nigeria’s Interactive Legal Community & Directory</span>
               </div>
 
-              <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Consultation</span>
-                  <span className="text-base font-black text-slate-900">{lawyer.fee}</span>
-                </div>
-                <Link
-                  href={`/book/${lawyer.id}`}
-                  className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-bold transition-colors shadow-sm"
-                >
-                  Book Session
-                </Link>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
+              <h1 className="font-editorial text-4xl sm:text-5xl lg:text-6xl font-black text-stone-900 tracking-tight leading-[1.08]">
+                Real legal guidance. <br />
+                <span className="text-amber-800 italic font-serif">Verified lawyers</span>, zero barriers.
+              </h1>
 
-      {/* Clear Document Readability Feature Showcase */}
-      <section className="py-16 px-6 bg-slate-900 text-white border-y border-slate-800">
-        <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-          <div>
-            <span className="text-xs font-bold uppercase tracking-widest text-emerald-400">Document Center</span>
-            <h2 className="text-3xl font-black tracking-tight text-white mt-2 leading-tight">
-              Review Legal Documents with Enhanced Readability
-            </h2>
-            <p className="mt-4 text-slate-300 text-sm leading-relaxed">
-              Wigally provides high-contrast typography and structured formatting optimized for long-form legal agreements, court filings, and contract review.
-            </p>
-            <ul className="mt-6 space-y-3">
-              {[
-                "High-contrast text styling designed for mobile and desktop reading.",
-                "Secure document uploads with full audit logging for client confidentiality.",
-                "Annual Stamp & Seal verification for legal validity in Nigerian courts."
-              ].map((item, idx) => (
-                <li key={idx} className="flex items-start gap-3 text-xs sm:text-sm text-slate-200">
-                  <CheckCircle2 size={18} className="text-emerald-400 shrink-0 mt-0.5" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Document Preview Card */}
-          <div className="bg-slate-950 p-6 sm:p-8 rounded-2xl border border-slate-800 shadow-2xl">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-4">
-              <div className="flex items-center gap-2">
-                <FileText size={20} className="text-emerald-400" />
-                <span className="text-xs font-bold text-slate-200 uppercase tracking-wider">Commercial Lease Agreement Draft</span>
-              </div>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800">
-                Seal Verified
-              </span>
-            </div>
-            <div className="doc-text text-slate-300 text-xs sm:text-sm bg-slate-900/90 p-5 rounded-xl border border-slate-800/80 leading-relaxed font-sans space-y-3">
-              <p className="font-bold text-slate-100">THIS COMMERCIAL LEASE AGREEMENT is made this 31st day of July 2026...</p>
-              <p className="text-slate-300">
-                1. <strong className="text-slate-100">DEMISED PREMISES:</strong> The Lessor hereby leases to the Lessee the commercial property situated in Lekki Phase 1, Lagos State.
+              <p className="text-stone-600 text-base sm:text-lg max-w-xl leading-relaxed">
+                Ask questions anonymously in our community lounge, test your rights with weekly dilemma polls, and consult NBA-verified advocates without intimidating upfront barriers.
               </p>
-              <p className="text-slate-300">
-                2. <strong className="text-slate-100">STAMP & SEAL COMPLIANCE:</strong> Executed under valid NBA Stamp & Seal as required under Rule 10 of the Rules of Professional Conduct 2023.
-              </p>
+
+              {/* Interactive Hero Box with Ask / Search Switcher */}
+              <div className="editorial-card rounded-2xl p-6 bg-white border border-stone-300 shadow-md">
+                <div className="flex items-center gap-3 pb-3 border-b border-stone-200">
+                  <button
+                    onClick={() => setHeroTab("ask")}
+                    className={`flex items-center gap-2 pb-2 text-xs sm:text-sm font-bold border-b-2 transition-all ${
+                      heroTab === "ask"
+                        ? "border-amber-800 text-amber-900"
+                        : "border-transparent text-stone-500 hover:text-stone-800"
+                    }`}
+                  >
+                    <MessageSquare size={16} />
+                    <span>Ask Community Lounge</span>
+                  </button>
+
+                  <button
+                    onClick={() => setHeroTab("search")}
+                    className={`flex items-center gap-2 pb-2 text-xs sm:text-sm font-bold border-b-2 transition-all ${
+                      heroTab === "search"
+                        ? "border-amber-800 text-amber-900"
+                        : "border-transparent text-stone-500 hover:text-stone-800"
+                    }`}
+                  >
+                    <Search size={16} />
+                    <span>Find Verified Lawyer</span>
+                  </button>
+                </div>
+
+                {heroTab === "ask" ? (
+                  <form onSubmit={handleQuickAskSubmit} className="mt-4 space-y-3">
+                    <div className="flex items-center justify-between text-xs text-stone-600">
+                      <span className="font-semibold text-stone-800">
+                        Ask any legal dilemma:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setQuickAnonymous(!quickAnonymous)}
+                        className="flex items-center gap-1.5 text-stone-500 hover:text-stone-900 font-mono text-[11px]"
+                      >
+                        <EyeOff size={13} className={quickAnonymous ? "text-amber-800" : ""} />
+                        <span>{quickAnonymous ? "Posting Anonymously" : "Public Mode"}</span>
+                      </button>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={quickQuestion}
+                        onChange={(e) => setQuickQuestion(e.target.value)}
+                        placeholder="e.g. Can my landlord increase rent without a 6-month notice?"
+                        className="flex-1 px-4 py-3 rounded-xl bg-stone-50 border border-stone-300 text-sm text-stone-900 placeholder-stone-400 focus:outline-none focus:border-stone-500"
+                      />
+                      <button
+                        type="submit"
+                        className="px-5 py-3 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-semibold text-xs sm:text-sm flex items-center gap-2 shrink-0 shadow-sm"
+                      >
+                        <span>Ask Lounge</span>
+                        <Send size={14} />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-[11px] text-stone-500 font-mono">
+                      <span>Popular topics:</span>
+                      <button
+                        type="button"
+                        onClick={() => setQuickQuestion("Can police search my phone at a checkpoint?")}
+                        className="hover:underline text-stone-700"
+                      >
+                        #PoliceCheckpoints
+                      </button>
+                      <span>•</span>
+                      <button
+                        type="button"
+                        onClick={() => setQuickQuestion("Co-founder quit after 3 months, can they keep equity?")}
+                        className="hover:underline text-stone-700"
+                      >
+                        #FounderEquity
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <form onSubmit={handleSearchSubmit} className="mt-4 space-y-3">
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Search size={16} className="absolute left-3.5 top-3.5 text-stone-400" />
+                        <input
+                          type="text"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder="Search by legal issue, specialty or state (e.g. Lagos, Tech Contracts)..."
+                          className="w-full pl-10 pr-4 py-3 rounded-xl bg-stone-50 border border-stone-300 text-sm text-stone-900 placeholder-stone-400 focus:outline-none focus:border-stone-500"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        className="px-5 py-3 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white font-semibold text-xs sm:text-sm flex items-center gap-2 shrink-0 shadow-sm"
+                      >
+                        <span>Find Counsel</span>
+                        <ArrowRight size={14} />
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            </div>
+
+            {/* Right Hero Column: Daily Quick Take Card */}
+            <div className="lg:col-span-5 space-y-4">
+              <DailyQuickTake quickTakes={communityData.quickTakes} />
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Call to action for lawyers */}
-      <section className="py-20 px-6 max-w-5xl mx-auto w-full">
-        <div className="rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950 p-10 md:p-14 text-white shadow-2xl border border-slate-800 relative overflow-hidden">
-          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8 text-center md:text-left">
+        {/* Live Audio AMAs Section */}
+        {communityData.amas && communityData.amas.length > 0 && (
+          <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <AmaBanner amas={communityData.amas} />
+          </section>
+        )}
+
+        {/* Community Dilemma Poll & Trending Deliberation Bento */}
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
             <div>
-              <span className="text-xs font-bold uppercase tracking-widest text-amber-400">For Nigerian Practitioners</span>
-              <h3 className="text-2xl sm:text-3xl font-black text-white mt-1">Are you a Legal Professional?</h3>
-              <p className="text-slate-300 text-sm sm:text-base mt-2 max-w-xl">
-                Expand your practice on Wigally. Manage consultations, issue digital legal advice, upload annual practice seals, and receive instant payments.
+              <span className="text-xs font-mono font-bold uppercase tracking-wider text-amber-900">
+                Interactive Community
+              </span>
+              <h2 className="font-editorial text-2xl sm:text-3xl font-bold text-stone-900 mt-1">
+                This Week in the Legal Lounge
+              </h2>
+            </div>
+            <Link
+              href="/community"
+              className="text-xs sm:text-sm font-semibold text-stone-800 hover:text-amber-800 flex items-center gap-1.5"
+            >
+              <span>Explore All Community Discussions</span>
+              <ArrowRight size={14} />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Poll column */}
+            <div className="lg:col-span-5">
+              {communityData.polls?.[0] && (
+                <CommunityPoll
+                  initialPoll={communityData.polls[0]}
+                  onVoteSuccess={(updated) => {
+                    setCommunityData((prev) => ({
+                      ...prev,
+                      polls: prev.polls.map((p) => (p.id === updated.id ? updated : p))
+                    }));
+                  }}
+                />
+              )}
+            </div>
+
+            {/* Deliberation spotlight column */}
+            <div className="lg:col-span-7">
+              {communityData.questions?.[0] && (
+                <div className="editorial-card rounded-2xl p-6 bg-white border border-stone-200 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono font-bold uppercase tracking-wider text-stone-600 bg-stone-100 px-2 py-0.5 rounded">
+                      Trending Deliberation
+                    </span>
+                    <span className="text-xs text-stone-400 font-mono">
+                      {communityData.questions[0].created_at}
+                    </span>
+                  </div>
+
+                  <h3 className="font-editorial text-xl font-bold text-stone-900 leading-snug">
+                    {communityData.questions[0].title}
+                  </h3>
+                  <p className="text-xs sm:text-sm text-stone-600 leading-relaxed font-sans line-clamp-3">
+                    {communityData.questions[0].body}
+                  </p>
+
+                  {/* Top Lawyer opinion preview */}
+                  {communityData.questions[0].answers?.[0] && (
+                    <div className="p-4 rounded-xl bg-amber-50/50 border border-amber-200/60 text-xs text-stone-700 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-stone-900">
+                          {communityData.questions[0].answers[0].lawyer_name}
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold uppercase">
+                          NBA Verified
+                        </span>
+                      </div>
+                      <p className="line-clamp-2 italic">
+                        "{communityData.questions[0].answers[0].body}"
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="pt-2 flex items-center justify-between border-t border-stone-100">
+                    <div className="text-xs text-stone-500 font-mono">
+                      {communityData.questions[0].answers?.length || 0} Verified Counsel Deliberating
+                    </div>
+                    <Link
+                      href="/community"
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-stone-900 hover:text-amber-800"
+                    >
+                      <span>Read Full Legal Debate</span>
+                      <ArrowRight size={13} />
+                    </Link>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Legal Survival Playbooks Preview */}
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <PlaybookLibrary playbooks={communityData.playbooks} />
+        </section>
+
+        {/* Verified Counsel Directory Spotlight (No Upfront Price Ads) */}
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+            <div>
+              <span className="text-xs font-mono font-bold uppercase tracking-wider text-emerald-900">
+                Verified Legal Directory
+              </span>
+              <h2 className="font-editorial text-2xl sm:text-3xl font-bold text-stone-900 mt-1">
+                Connect with Verified Counsel
+              </h2>
+              <p className="text-xs sm:text-sm text-stone-500 mt-1">
+                Every lawyer is independently audited against NBA Roll of Legal Practitioners, NIN, and Supreme Court records.
               </p>
             </div>
             <Link
-              href="/signup/lawyer"
-              className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-4 rounded-xl font-bold transition-all shrink-0 shadow-lg shadow-emerald-600/30 active:scale-95 text-sm sm:text-base"
+              href="/search"
+              className="px-4 py-2 rounded-xl bg-stone-900 text-white text-xs font-semibold hover:bg-stone-800 transition-colors"
             >
-              Join Wigally Network
-              <ChevronRight size={18} />
+              Browse Complete Directory
             </Link>
           </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {featuredLawyers.map((lawyer) => (
+              <div
+                key={lawyer.id}
+                className="editorial-card rounded-2xl p-6 bg-white border border-stone-200 flex flex-col justify-between shadow-sm hover:border-stone-300 transition-all"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="w-10 h-10 rounded-xl bg-stone-100 border border-stone-200 text-stone-800 font-bold flex items-center justify-center text-sm">
+                      {lawyer.name.charAt(0)}
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-amber-700 font-semibold font-mono">
+                      <Star size={13} fill="currentColor" />
+                      <span>{lawyer.rating}</span>
+                    </div>
+                  </div>
+
+                  <h3 className="font-bold text-base text-stone-900">{lawyer.name}</h3>
+                  <p className="text-xs text-stone-500 mt-1 leading-snug">{lawyer.title}</p>
+                  <p className="text-xs text-stone-400 mt-1 flex items-center gap-1">
+                    <MapPin size={12} /> {lawyer.state}
+                  </p>
+
+                  <div className="flex flex-wrap gap-1.5 mt-4">
+                    {lawyer.badges.map((b) => (
+                      <span
+                        key={b}
+                        className="text-[10px] px-2 py-0.5 rounded-md bg-stone-100 text-stone-700 font-semibold border border-stone-200"
+                      >
+                        {b}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-stone-100 flex items-center justify-between">
+                  <span className="text-[11px] font-mono text-emerald-800 font-semibold">
+                    {lawyer.status}
+                  </span>
+                  <Link
+                    href={`/search?q=${encodeURIComponent(lawyer.name)}`}
+                    className="text-xs font-bold text-stone-900 hover:text-amber-800 flex items-center gap-1"
+                  >
+                    <span>Profile</span>
+                    <ArrowRight size={12} />
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </main>
+
+      {/* Editorial Footer */}
+      <footer className="bg-stone-900 text-stone-400 py-12 px-4 sm:px-6 lg:px-8 border-t border-stone-800 text-xs">
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-stone-800 flex items-center justify-center text-amber-400 font-bold">
+              <Scale size={18} />
+            </div>
+            <div>
+              <span className="font-bold text-white text-sm">Wigally</span>
+              <p className="text-[11px] text-stone-500">
+                Verified Legal Services & Community Lounge in Nigeria
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-6 text-stone-300">
+            <Link href="/community" className="hover:text-white transition-colors">
+              Community Lounge
+            </Link>
+            <Link href="/search" className="hover:text-white transition-colors">
+              Find Verified Lawyers
+            </Link>
+            <Link href="/login" className="hover:text-white transition-colors">
+              Sign In
+            </Link>
+            <Link href="/signup" className="hover:text-white transition-colors">
+              Join as Lawyer or Client
+            </Link>
+          </div>
+
+          <p className="text-[11px] text-stone-500">
+            © {new Date().getFullYear()} Wigally. Designed for legal clarity & community deliberation.
+          </p>
         </div>
-      </section>
+      </footer>
     </div>
   );
 }

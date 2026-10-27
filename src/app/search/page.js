@@ -14,8 +14,25 @@ function SearchContent() {
   const [query, setQuery] = useState(initialQuery);
   const [urgency, setUrgency] = useState("this_week");
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState([]);
-  const [searched, setSearched] = useState(false);
+  const [isOfflineCached, setIsOfflineCached] = useState(false);
+
+  // Initialize from offline cache if available
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("wigally_cached_lawyers");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setResults(parsed);
+            setSearched(true);
+          }
+        }
+      } catch (e) {
+        console.warn("Failed reading cached lawyers:", e);
+      }
+    }
+  }, []);
 
   const fetchMatches = async (searchQuery) => {
     setLoading(true);
@@ -34,10 +51,31 @@ function SearchContent() {
       });
       if (res.ok) {
         const data = await res.json();
-        setResults(data.matches || []);
+        const matches = data.matches || [];
+        setResults(matches);
+        setIsOfflineCached(false);
+        if (typeof window !== "undefined" && matches.length > 0) {
+          try {
+            localStorage.setItem("wigally_cached_lawyers", JSON.stringify(matches));
+          } catch (e) {}
+        }
+      } else {
+        throw new Error("Match fetch failed");
       }
     } catch (err) {
-      console.error(err);
+      console.warn("Match offline fallback:", err);
+      if (typeof window !== "undefined") {
+        try {
+          const cached = localStorage.getItem("wigally_cached_lawyers");
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setResults(parsed);
+              setIsOfflineCached(true);
+            }
+          }
+        } catch (e) {}
+      }
     } finally {
       setLoading(false);
     }
@@ -58,17 +96,17 @@ function SearchContent() {
   };
 
   return (
-    <div className="flex flex-col flex-1 bg-slate-50">
+    <div className="flex flex-col flex-1 warm-parchment-pattern min-h-screen">
       {/* Header Banner */}
-      <div className="bg-slate-900 pb-24 pt-10 px-6 border-b border-slate-800 text-white">
+      <div className="bg-stone-900 pb-20 pt-10 px-6 border-b border-stone-800 text-white">
         <div className="max-w-4xl mx-auto">
-          <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-2">
+          <div className="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-wider mb-2 font-mono">
             <Scale size={16} />
             Wigally Verified Directory
           </div>
           <h1 className="text-3xl font-black text-white mb-2 tracking-tight">Find Your Legal Counsel</h1>
           <p className="text-slate-300 mb-8 text-sm sm:text-base font-normal">
-            Describe your legal matter to view NBA-verified lawyers with transparent fees and court admissions.
+            Describe your legal matter to connect with verified NBA-enrolled lawyers, view active court admissions, and initiate confidential intake.
           </p>
 
           <form onSubmit={handleSearch} className="bg-white p-3 sm:p-4 rounded-2xl shadow-xl flex flex-col md:flex-row gap-3 items-end border border-slate-200">
@@ -110,6 +148,12 @@ function SearchContent() {
 
       {/* Results Container */}
       <div className="max-w-4xl mx-auto w-full px-6 -mt-10 mb-20 z-10 relative">
+        {isOfflineCached && (
+          <div className="mb-4 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-center gap-2.5 text-xs font-medium shadow-sm">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+            <span><strong>Offline Mode:</strong> Showing your previously viewed verified legal practitioners.</span>
+          </div>
+        )}
         {loading && (
           <div className="bg-white rounded-2xl p-12 text-center shadow-md border border-slate-200">
             <Loader2 className="w-10 h-10 animate-spin text-emerald-600 mx-auto mb-3" />
@@ -121,7 +165,7 @@ function SearchContent() {
           <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-slate-200">
             <Briefcase className="w-12 h-12 mx-auto text-slate-300 mb-3" />
             <p className="text-slate-600 font-semibold text-sm">No legal practitioners found matching that query.</p>
-            <p className="text-slate-400 text-xs mt-1">Try searching broader keywords such as "Lagos", "Property", or "Contracts".</p>
+            <p className="text-slate-400 text-xs mt-1">Try searching broader keywords such as &quot;Lagos&quot;, &quot;Property&quot;, or &quot;Contracts&quot;.</p>
           </div>
         )}
 
@@ -171,8 +215,11 @@ function SearchContent() {
                       </p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fee</p>
-                      <p className="text-base font-black text-slate-900">₦{(lw.price_ngn || lw.base_consult_fee_ngn || 30000).toLocaleString()}</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Engagement</p>
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 mt-1">
+                        <ShieldCheck size={12} className="text-emerald-600" />
+                        Confidential Escrow
+                      </span>
                     </div>
                   </div>
 

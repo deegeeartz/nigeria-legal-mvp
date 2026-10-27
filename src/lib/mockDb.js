@@ -265,7 +265,174 @@ globalThis.__MOCK_DB__ = globalThis.__MOCK_DB__ || {
       verification_document_id: "doc_kyc_004"
     }
   ],
-  practiceSeals: {}
+  practiceSeals: {},
+  communityQuestions: [
+    {
+      id: "q_001",
+      title: "Can a Lagos landlord give 7 days notice to quit on an annual tenancy?",
+      body: "I have rented an apartment in Gbagada, Lagos for 3 years paying rent annually. My current term runs until October, but my landlord's caretaker served a 7-day notice to quit claiming they want to renovate the building. Can they legally evict me without the 6-month statutory notice?",
+      category: "Property & Tenancy",
+      author_name: "Anonymous Tenant in Gbagada",
+      is_anonymous: true,
+      author_role: "client",
+      author_id: 1,
+      user_handle: "@gbagada_tenant",
+      created_at: "2 hours ago",
+      timestamp: Date.now() - 7200000,
+      upvotes: 38,
+      tags: ["LagosTenancyLaw", "NoticeToQuit", "RecoveryOfPremises"],
+      answers: [
+        {
+          id: "ans_001",
+          lawyer_id: "lw_001",
+          lawyer_name: "Barr. Amaka Okonkwo",
+          lawyer_title: "Commercial & Property Counsel • 8 Yrs Call",
+          is_san: false,
+          is_verified_lawyer: true,
+          nba_branch: "Lagos Branch",
+          upvotes: 27,
+          created_at: "1 hour ago",
+          body: "Under Section 13(1) of the Tenancy Law of Lagos State 2011, for a yearly tenancy where no contrary notice period was agreed in writing, the statutory notice to quit is 6 calendar months.\n\nEven after a valid notice to quit expires, the landlord cannot use force. They must issue a 7-day 'Notice of Owner's Intention to Apply to Court to Recover Possession' and obtain a warrant of possession from the Magistrate Court. Self-help eviction is a criminal offense under Section 44.",
+          deliberations: [
+            {
+              id: "delib_001",
+              lawyer_id: "lw_002",
+              lawyer_name: "Ibrahim Yusuf SAN",
+              lawyer_title: "Senior Advocate of Nigeria",
+              is_san: true,
+              nba_branch: "Abuja / Lagos",
+              comment: "I concur with Learned Colleague Barr. Okonkwo. However, always review your initial lease agreement. If there was an express covenant waiving or contracting out of the 6-month notice, the Supreme Court in African Petroleum Ltd v. Owodunni (1991) established that party autonomy governs. Check if you signed a clause stipulating shorter notice.",
+              created_at: "45 mins ago",
+              upvotes: 19
+            },
+            {
+              id: "delib_002",
+              lawyer_id: "lw_005",
+              lawyer_name: "Kemi Adegoke SAN",
+              lawyer_title: "Senior Advocate of Nigeria",
+              is_san: true,
+              nba_branch: "Lagos Branch",
+              comment: "Learned Silk makes a vital caveat. Also note: intending to 'renovate' does not constitute an urgent nuisance or structural hazard under Section 25 unless certified by the Lagos State Building Control Agency (LASBCA). Keep proof of your rent receipts.",
+              created_at: "20 mins ago",
+              upvotes: 12
+            }
+          ]
+        }
+      ]
+    },
+    {
+      id: "q_002",
+      title: "Co-founder left our Nigerian tech startup: can we claw back unvested shares?",
+      body: "We incorporated our fintech company with CAC in 2024. One of the co-founders stopped working after 4 months and moved to Canada. They currently hold 30% on CAC Form CAC1.1. We had a verbal agreement for a 4-year vesting schedule with 1-year cliff, but didn't execute the formal Shareholders Agreement. How do we protect the startup from dead equity?",
+      category: "Corporate & Tech",
+      author_name: "Tunde Bakare",
+      is_anonymous: false,
+      author_role: "client",
+      author_id: 1,
+      user_handle: "@tundebakare",
+      created_at: "5 hours ago",
+      timestamp: Date.now() - 18000000,
+      upvotes: 54,
+      tags: ["CAMA2020", "StartupEquity", "ShareholdersAgreement", "CAC"],
+      answers: [
+        {
+          id: "ans_002",
+          lawyer_id: "lw_001",
+          lawyer_name: "Barr. Amaka Okonkwo",
+          lawyer_title: "Corporate & Commercial Law • 8 Yrs Call",
+          is_san: false,
+          is_verified_lawyer: true,
+          nba_branch: "Lagos Branch",
+          upvotes: 35,
+          created_at: "3 hours ago",
+          body: "Under Companies and Allied Matters Act (CAMA) 2020, once shares are allotted and registered with the Corporate Affairs Commission (CAC), the holder is legally a member of the company with proprietary rights under Section 138.\n\nA verbal vesting agreement is notoriously difficult to enforce against a registered title unless there is written documentary proof (emails, Slack messages, founder MOU) evidencing the condition precedent. Your immediate options are: 1) Negotiate a formal Share Buyback / Surrender Agreement; 2) Pass a special resolution for capital restructuring if permitted by your Articles of Association; or 3) Issue new shares / dilution pool for active contributors.",
+          deliberations: [
+            {
+              id: "delib_003",
+              lawyer_id: "lw_005",
+              lawyer_name: "Kemi Adegoke SAN",
+              lawyer_title: "Senior Advocate of Nigeria",
+              is_san: true,
+              nba_branch: "Lagos Branch",
+              comment: "Counsel Okonkwo highlights the core CAMA obstacle. Let me caution against hasty dilution: if the departing founder challenges it under Section 343 for unfairly prejudicial conduct or minority oppression, you risk injunctions that freeze future venture funding. Engage a corporate mediator or counsel to draft a clean separation deed.",
+              created_at: "2 hours ago",
+              upvotes: 22
+            }
+          ]
+        }
+      ]
+    },
+    {
+      id: "q_003",
+      title: "Can police officers search my phone or bank apps at a checkpoint without a warrant?",
+      body: "I was stopped along Lekki-Epe expressway and officers demanded I unlock my phone and open my cryptocurrency and banking applications. When I refused, they threatened to detain me. What are my constitutional protections and the exact legal sections I can cite respectfully?",
+      category: "Constitutional & Civil Rights",
+      author_name: "Anonymous Citizen in Lekki",
+      is_anonymous: true,
+      author_role: "client",
+      author_id: 99,
+      user_handle: "@lekki_driver",
+      created_at: "1 day ago",
+      timestamp: Date.now() - 86400000,
+      upvotes: 89,
+      tags: ["ConstitutionalRights", "PoliceStops", "Section37", "Privacy"],
+      answers: [
+        {
+          id: "ans_003",
+          lawyer_id: "lw_002",
+          lawyer_name: "Ibrahim Yusuf SAN",
+          lawyer_title: "Senior Advocate of Nigeria",
+          is_san: true,
+          nba_branch: "Abuja / Federal High Court",
+          upvotes: 73,
+          created_at: "22 hours ago",
+          body: "No law enforcement officer in Nigeria has the legal authority to randomly search your mobile device or banking apps without a valid search warrant or reasonable suspicion connected to an ongoing investigation.\n\nKey authorities:\n1. Section 37 of the 1999 Constitution of Nigeria (as amended) guarantees your fundamental right to privacy of citizen telephone communications and correspondence.\n2. In Nnamdi Nwokocha v. IGP, the Federal High Court affirmed that searching a citizen's phone without a search warrant violates Section 37.\n3. The Inspector General of Police (IGP) has issued multiple operational directives reiterating that routine phone searching is an act of extortion and gross misconduct.",
+          deliberations: [
+            {
+              id: "delib_004",
+              lawyer_id: "lw_001",
+              lawyer_name: "Barr. Amaka Okonkwo",
+              lawyer_title: "Advocate • NBA Human Rights Committee",
+              is_san: false,
+              nba_branch: "Lagos Branch",
+              comment: "Learned Silk is absolutely right. Practical safety tip: Remain polite, do not resist physically, state calmly: 'Officer, my phone contains private work and banking data protected under Section 37 of the 1999 Constitution and Nigeria Police regulations.' Request to proceed to the nearest police station if they insist, rather than complying in isolated locations.",
+              created_at: "18 hours ago",
+              upvotes: 41
+            }
+          ]
+        }
+      ]
+    },
+    {
+      id: "q_004",
+      title: "Employer terminated contract without 1-month notice or salary in lieu. Recourse?",
+      body: "I worked as an operations manager for 2 years. My appointment letter stated either party could terminate by giving 1 month notice or 1 month gross salary in lieu. Management sent an instant email termination on Friday with zero notice and offered only prorated 10 days pay. Can I approach the National Industrial Court?",
+      category: "Employment & Labour",
+      author_name: "Funke Alabi",
+      is_anonymous: false,
+      author_role: "client",
+      author_id: 102,
+      user_handle: "@funke_operations",
+      created_at: "2 days ago",
+      timestamp: Date.now() - 172800000,
+      upvotes: 31,
+      tags: ["LabourAct", "NationalIndustrialCourt", "WrongfulTermination"],
+      answers: [
+        {
+          id: "ans_004",
+          lawyer_id: "lw_005",
+          lawyer_name: "Kemi Adegoke SAN",
+          lawyer_title: "Senior Advocate & Employment Law Specialist",
+          is_san: true,
+          nba_branch: "Lagos Branch",
+          upvotes: 24,
+          created_at: "1 day ago",
+          body: "Yes, you have a solid cause of action for wrongful termination at the National Industrial Court of Nigeria (NICN) under Section 254C of the 1999 Constitution.\n\nIn Nigerian labour jurisprudence (Chukwumah v. Shell Petroleum Development Co.), where a contract provides for notice or payment in lieu, the payment in lieu must be made contemporaneously (at the exact moment) the termination letter is handed over. If they terminated you instantly without contemporaneous payment, the termination is wrongful. You are entitled to 1 month full gross salary in lieu of notice, plus any accrued leave allowance and pension remittances.",
+          deliberations: []
+        }
+      ]
+    }
+  ]
 };
 
 export const mockDb = globalThis.__MOCK_DB__;
