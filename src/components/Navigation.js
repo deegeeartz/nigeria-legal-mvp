@@ -15,6 +15,7 @@ import {
   Scale,
   Sparkles,
   LogIn,
+  LogOut,
   UserPlus,
   BookOpen
 } from "lucide-react";
@@ -56,8 +57,9 @@ export function Navigation() {
   return (
     <>
       {/* Desktop Header Navigation */}
-      <header className="hidden md:flex items-center justify-between px-8 py-3.5 bg-stone-50/90 backdrop-blur-md sticky top-0 z-50 border-b border-stone-200">
-        <div className="flex items-center gap-7">
+      <header className="hidden md:flex items-center justify-between px-6 lg:px-8 py-3 bg-stone-50/95 backdrop-blur-md sticky top-0 z-50 border-b border-stone-200">
+        {/* Left: Logo & Instant Search */}
+        <div className="flex items-center gap-5">
           <Link href="/" className="flex items-center gap-2.5 group">
             <div className="w-9 h-9 rounded-xl bg-stone-900 flex items-center justify-center text-amber-400 font-bold shadow-sm border border-stone-800 group-hover:scale-105 transition-transform">
               <Scale size={20} strokeWidth={2.5} />
@@ -66,72 +68,119 @@ export function Navigation() {
               Wigally<span className="w-2 h-2 rounded-full bg-amber-600 inline-block"></span>
             </span>
           </Link>
-          <nav className="flex items-center gap-3">
-            {baseLinks.map((link) => {
-              const isActive = pathname === link.href;
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={`text-xs sm:text-sm font-semibold transition-colors flex items-center gap-1.5 py-1 px-2.5 rounded-lg ${
-                    isActive
-                      ? "text-stone-900 bg-stone-200/60"
-                      : "text-stone-600 hover:text-stone-900 hover:bg-stone-100"
-                  }`}
-                >
-                  <span>{link.label}</span>
-                  {link.badge && (
-                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-700 text-white font-bold uppercase tracking-wider font-mono">
-                      {link.badge}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
-          </nav>
+
+          {/* Facebook-style Search Input */}
+          <div className="relative hidden lg:block w-56 xl:w-64">
+            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
+            <input
+              type="text"
+              placeholder="Search lawyers, cases..."
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && e.target.value.trim()) {
+                  window.location.href = `/search?q=${encodeURIComponent(e.target.value.trim())}`;
+                }
+              }}
+              className="w-full pl-9 pr-3 py-1.5 rounded-full bg-stone-200/60 border border-transparent focus:border-amber-600 focus:bg-white text-xs text-stone-900 placeholder:text-stone-500 focus:outline-none transition-all"
+            />
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* Center: Navigation Tabs */}
+        <nav className="flex items-center gap-1.5 lg:gap-2">
+          {baseLinks.slice(0, 5).map((link) => {
+            const isActive = pathname === link.href;
+            const Icon = link.icon;
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`text-xs font-bold transition-all flex items-center gap-1.5 py-1.5 px-3 rounded-full ${
+                  isActive
+                    ? "text-stone-950 bg-stone-200 shadow-2xs"
+                    : "text-stone-600 hover:text-stone-900 hover:bg-stone-100"
+                }`}
+              >
+                <Icon size={14} className={isActive ? "text-amber-800" : "text-stone-500"} />
+                <span>{link.label}</span>
+                {link.badge && (
+                  <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-700 text-white font-mono font-bold uppercase tracking-wider">
+                    {link.badge}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Right: Actions, Messages, Notifications, Profile */}
+        <div className="flex items-center gap-2.5">
           <PWAInstallButton variant="header" />
+
           {user ? (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              {/* Facebook-style Messenger Button */}
               <Link
                 href="/dashboard"
-                className="text-xs font-semibold text-stone-800 font-mono hover:text-stone-900 bg-stone-200/50 px-2.5 py-1.5 rounded-lg border border-stone-200 flex items-center gap-2"
+                title="Case Chat & Consultations"
+                className="w-9 h-9 rounded-full bg-stone-200/80 hover:bg-stone-300 text-stone-800 flex items-center justify-center transition-colors relative"
+              >
+                <MessageSquare size={16} />
+                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-amber-600 text-white font-mono text-[9px] font-bold flex items-center justify-center">
+                  2
+                </span>
+              </Link>
+
+              {/* Facebook-style Notifications Bell */}
+              <Link
+                href="/notifications"
+                title="Notifications"
+                className="w-9 h-9 rounded-full bg-stone-200/80 hover:bg-stone-300 text-stone-800 flex items-center justify-center transition-colors relative"
+              >
+                <Bell size={16} />
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500" />
+              </Link>
+
+              {/* Profile Capsule */}
+              <Link
+                href="/dashboard"
+                className="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full bg-stone-200/60 hover:bg-stone-200 border border-stone-200 transition-colors"
               >
                 {user.avatar_url ? (
                   <img
                     src={user.avatar_url}
                     alt=""
-                    className="w-5 h-5 rounded-full object-cover border border-stone-300 shrink-0"
+                    className="w-7 h-7 rounded-full object-cover border border-amber-600/50 shrink-0"
                   />
                 ) : (
-                  <User size={13} />
+                  <div className="w-7 h-7 rounded-full bg-stone-900 text-amber-400 font-bold flex items-center justify-center text-xs">
+                    {user.full_name?.charAt(0) || "U"}
+                  </div>
                 )}
-                <span className="truncate max-w-[120px]">{user.full_name}</span>
-                <span className="text-[10px] uppercase font-bold text-amber-800">({user.role})</span>
+                <span className="text-xs font-bold text-stone-900 truncate max-w-[100px] font-serif">
+                  {user.full_name?.split(" ")[0]}
+                </span>
               </Link>
+
               <button
                 onClick={logout}
-                className="px-3.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 rounded-lg transition-colors border border-stone-200"
+                title="Log out"
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 rounded-lg transition-colors border border-stone-200"
               >
-                Log Out
+                <LogOut size={13} className="shrink-0" />
+                Sign Out
               </button>
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <div className="hidden lg:flex items-center text-[11px] font-medium text-stone-500 mr-1">
-                <span>Not a member?</span>
-              </div>
               <Link
                 href="/login"
-                className="px-3.5 py-1.5 text-xs font-semibold text-stone-700 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-colors border border-stone-300"
+                className="px-3.5 py-1.5 text-xs font-bold text-stone-700 hover:text-stone-900 hover:bg-stone-100 rounded-full transition-colors border border-stone-300"
               >
                 Sign In
               </Link>
               <Link
                 href="/signup"
-                className="px-4 py-1.5 text-xs font-bold text-white bg-stone-900 hover:bg-stone-800 rounded-lg shadow-xs transition-all active:scale-95 flex items-center gap-1.5"
+                className="px-4 py-1.5 text-xs font-bold text-white bg-stone-900 hover:bg-stone-800 rounded-full shadow-xs transition-all active:scale-95 flex items-center gap-1.5"
               >
                 <UserPlus size={13} />
                 <span>Join Free</span>

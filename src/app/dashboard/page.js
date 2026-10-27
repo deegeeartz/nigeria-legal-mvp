@@ -8,6 +8,8 @@ import { GoogleIcon } from "@/components/GoogleAuthButton";
 import { LawyerCaseManager } from "@/components/dashboard/LawyerCaseManager";
 import { ArticleEditorModal } from "@/components/articles/ArticleEditorModal";
 import { ProfilePictureModal } from "@/components/dashboard/ProfilePictureModal";
+import { CaseChatWorkspace } from "@/components/dashboard/CaseChatWorkspace";
+import { CaseChatModal } from "@/components/dashboard/CaseChatModal";
 import {
   Scale,
   ShieldCheck,
@@ -36,9 +38,11 @@ import {
 export default function DashboardPage() {
   const { user, logout, loading, setUser, updateProfile } = useAuth();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState("cases"); // "cases", "consultations", "publications"
+  const [activeTab, setActiveTab] = useState("cases"); // "cases", "consultations", "chat", "publications"
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isChatModalOpen, setIsChatModalOpen] = useState(false);
+  const [activeChatConvId, setActiveChatConvId] = useState(1);
   const [avatarSuccessToast, setAvatarSuccessToast] = useState(false);
   const [lawyerArticles, setLawyerArticles] = useState([]);
 
@@ -80,6 +84,7 @@ export default function DashboardPage() {
       lawyer_id: newRole === "lawyer" ? (user.lawyer_id || "lw_001") : null,
     };
     setUser(updated);
+    setActiveTab(newRole === "lawyer" ? "cases" : "consultations");
   };
 
   const handleArticlePublished = (newArticle) => {
@@ -172,7 +177,7 @@ export default function DashboardPage() {
           <div className="bg-white rounded-2xl p-1.5 border border-stone-200 shadow-sm flex items-center gap-2 overflow-x-auto">
             <button
               onClick={() => setActiveTab("cases")}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
                 activeTab === "cases"
                   ? "bg-stone-900 text-white shadow-xs"
                   : "text-stone-600 hover:text-stone-900 hover:bg-stone-100"
@@ -184,7 +189,7 @@ export default function DashboardPage() {
 
             <button
               onClick={() => setActiveTab("consultations")}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
                 activeTab === "consultations"
                   ? "bg-stone-900 text-white shadow-xs"
                   : "text-stone-600 hover:text-stone-900 hover:bg-stone-100"
@@ -195,8 +200,23 @@ export default function DashboardPage() {
             </button>
 
             <button
+              onClick={() => setActiveTab("chat")}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+                activeTab === "chat"
+                  ? "bg-stone-900 text-white shadow-xs"
+                  : "text-stone-600 hover:text-stone-900 hover:bg-stone-100"
+              }`}
+            >
+              <MessageSquare size={15} />
+              <span>Case Chat & Docs</span>
+              <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-700 text-[10px] font-mono font-bold">
+                2 Active
+              </span>
+            </button>
+
+            <button
               onClick={() => setActiveTab("publications")}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
                 activeTab === "publications"
                   ? "bg-stone-900 text-white shadow-xs"
                   : "text-stone-600 hover:text-stone-900 hover:bg-stone-100"
@@ -206,10 +226,73 @@ export default function DashboardPage() {
               <span>My Published Articles ({lawyerArticles.length})</span>
             </button>
           </div>
-        ) : null}
+        ) : (
+          /* Client View Tab Bar */
+          <div className="bg-white rounded-2xl p-1.5 border border-stone-200 shadow-sm flex items-center gap-2 overflow-x-auto">
+            <button
+              onClick={() => setActiveTab("consultations")}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+                activeTab === "consultations"
+                  ? "bg-stone-900 text-white shadow-xs"
+                  : "text-stone-600 hover:text-stone-900 hover:bg-stone-100"
+              }`}
+            >
+              <Calendar size={15} />
+              <span>Consultations & Retainer (1)</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("chat")}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+                activeTab === "chat"
+                  ? "bg-stone-900 text-white shadow-xs"
+                  : "text-stone-600 hover:text-stone-900 hover:bg-stone-100"
+              }`}
+            >
+              <MessageSquare size={15} />
+              <span>Messages & Case Chat</span>
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+            </button>
+          </div>
+        )}
 
         {/* Content based on Role and Active Tab */}
-        {isLawyer && activeTab === "cases" ? (
+        {activeTab === "chat" ? (
+          <div className="space-y-4">
+            <div className="bg-white rounded-3xl p-6 border border-stone-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider bg-amber-100 text-amber-900">
+                    Confidential Legal Channel
+                  </span>
+                  <span className="text-xs text-stone-400">• Rule 19 RPC & NDPA 2023 Protected</span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-black text-stone-900 font-serif">
+                  Case Chat & Document Vault
+                </h2>
+                <p className="text-xs text-stone-500 font-medium">
+                  {isLawyer
+                    ? "Direct attorney-client privilege threads with your clients. Exchange draft pleadings, review contracts, and manage escrow milestones."
+                    : "Encrypted communications with your counsel. Share title deeds, lease drafts, review advice, and approve escrow milestones."}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                  <ShieldCheck size={14} className="text-emerald-700" />
+                  100% Escrow Protected
+                </span>
+              </div>
+            </div>
+
+            <CaseChatWorkspace
+              currentUser={user}
+              isLawyer={isLawyer}
+              initialConversationId={activeChatConvId}
+              embedded={true}
+            />
+          </div>
+        ) : isLawyer && activeTab === "cases" ? (
           <LawyerCaseManager
             lawyerId={user.lawyer_id || "lw_001"}
             lawyerName={user.full_name || "Barr. Amaka Okonkwo"}
@@ -422,8 +505,11 @@ export default function DashboardPage() {
                           Video Room: On Hold
                         </span>
                         <button
-                          onClick={() => alert("Secure case messaging thread is open. You can exchange matter notes and confidential review documents with counsel.")}
-                          className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-2xs transition-all"
+                          onClick={() => {
+                            setActiveChatConvId(1);
+                            setIsChatModalOpen(true);
+                          }}
+                          className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
                         >
                           <MessageSquare size={14} /> Case Chat & Docs
                         </button>
@@ -576,6 +662,15 @@ export default function DashboardPage() {
         onClose={() => setIsProfileModalOpen(false)}
         currentUser={user}
         onAvatarUpdated={handleAvatarUpdated}
+      />
+
+      {/* Case Chat & Documents Modal */}
+      <CaseChatModal
+        isOpen={isChatModalOpen}
+        onClose={() => setIsChatModalOpen(false)}
+        initialConversationId={activeChatConvId}
+        currentUser={user}
+        isLawyer={isLawyer}
       />
 
       {avatarSuccessToast && (

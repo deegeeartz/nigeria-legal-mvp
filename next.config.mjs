@@ -9,6 +9,7 @@ const withPWA = withPWAInit({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   turbopack: {},
+  // Fresh compiler cache flush
 };
 
 export default withPWA(nextConfig);

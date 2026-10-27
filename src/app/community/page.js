@@ -23,7 +23,14 @@ import {
   MessageCircle,
   ThumbsUp,
   Flame,
-  ArrowRight
+  ArrowRight,
+  Share2,
+  Bookmark,
+  Globe,
+  TrendingUp,
+  Lock,
+  Plus,
+  Check
 } from "lucide-react";
 import { DailyQuickTake } from "@/components/community/DailyQuickTake";
 import { CommunityPoll } from "@/components/community/CommunityPoll";
@@ -50,6 +57,75 @@ const CATEGORIES = [
   "Contracts & Freelance",
   "Constitutional & Civil Rights",
   "Data Privacy & NDPA"
+];
+
+const SPOTLIGHT_STORIES = [
+  {
+    id: 1,
+    title: "Lagos Rent Control AMA",
+    author: "Barr. Amaka",
+    avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=300&q=80",
+    isLive: true,
+  },
+  {
+    id: 2,
+    title: "CAMA 2020 Filing",
+    author: "Chidinma A.",
+    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80",
+    isLive: false,
+  },
+  {
+    id: 3,
+    title: "Supreme Court Verdict",
+    author: "Ibrahim SAN",
+    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80",
+    isLive: false,
+  },
+  {
+    id: 4,
+    title: "Remote Worker NDPA",
+    author: "Legal Pulse",
+    avatar: "",
+    isLive: false,
+  },
+  {
+    id: 5,
+    title: "Freelance Contracts",
+    author: "Bar Council",
+    avatar: "",
+    isLive: false,
+  }
+];
+
+const ACTIVE_LAWYERS = [
+  {
+    id: "lw_001",
+    name: "Barr. Amaka Okonkwo",
+    title: "Employment & Contracts",
+    state: "Lagos Bar",
+    avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=300&q=80",
+  },
+  {
+    id: "lw_002",
+    name: "Ibrahim Yusuf SAN",
+    title: "Property & Commercial",
+    state: "Abuja Bar",
+    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80",
+  },
+  {
+    id: "lw_003",
+    name: "Chidinma Adeleke",
+    title: "Fintech & CAC Filing",
+    state: "Lagos Bar",
+    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80",
+  },
+  {
+    id: "lw_004",
+    name: "Babatunde Fashola",
+    title: "Land Title & Conveyance",
+    state: "Ikeja Bar",
+    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80",
+  }
 ];
 
 export default function CommunityLoungePage() {
@@ -365,39 +441,195 @@ export default function CommunityLoungePage() {
           </div>
         )}
 
-        {/* Tab 4: Discussions & Deliberation Feed (Default) */}
+        {/* Tab 4: Discussions & Deliberation Feed (Modern Facebook 3-Column Layout) */}
         {activeTab === "feed" && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Main Feed Column */}
-            <div className="lg:col-span-8 space-y-6">
-              {/* Category Pills & Search */}
-              <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-                  {CATEGORIES.map((cat) => (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Left Column (3 cols): Profile & Shortcuts */}
+            <aside className="lg:col-span-3 hidden lg:block sticky top-20 space-y-4">
+              {/* User Profile Summary */}
+              {user ? (
+                <div className="bg-white rounded-2xl p-4 border border-stone-200 shadow-xs space-y-3">
+                  <div className="flex items-center gap-3">
+                    {user.avatar_url ? (
+                      <img
+                        src={user.avatar_url}
+                        alt=""
+                        className="w-11 h-11 rounded-full object-cover border-2 border-stone-800 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-11 h-11 rounded-full bg-stone-900 text-amber-400 font-bold flex items-center justify-center font-serif text-sm shrink-0">
+                        {user.full_name?.charAt(0) || "U"}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <h4 className="text-sm font-black text-stone-900 truncate font-serif">
+                        {user.full_name}
+                      </h4>
+                      <p className="text-[11px] text-stone-500 capitalize">
+                        {user.role === "lawyer" ? "Verified Practitioner" : "Verified Member"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="pt-2 border-t border-stone-100 flex items-center justify-between text-[11px] text-stone-600 font-mono">
+                    <span>Deliberations: 12</span>
+                    <span className="text-emerald-700 font-bold">100% Escrow Active</span>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Category Shortcuts Menu */}
+              <div className="bg-white rounded-2xl p-3 border border-stone-200 shadow-xs space-y-1">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400 px-3 py-1 block">
+                  Legal Channels
+                </span>
+                {CATEGORIES.map((cat) => {
+                  const isSelected = selectedCategory === cat;
+                  return (
                     <button
                       key={cat}
                       onClick={() => setSelectedCategory(cat)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
-                        selectedCategory === cat
-                          ? "bg-amber-800 text-white shadow-xs"
-                          : "bg-white border border-stone-200 text-stone-600 hover:bg-stone-100"
+                      className={`w-full text-left px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
+                        isSelected
+                          ? "bg-stone-900 text-white shadow-2xs"
+                          : "text-stone-700 hover:bg-stone-100 hover:text-stone-900"
                       }`}
                     >
-                      {cat}
+                      <span className="truncate">{cat}</span>
+                      {cat === "All" && <span className="text-[10px] opacity-70 font-mono">({communityData.questions?.length})</span>}
                     </button>
+                  );
+                })}
+              </div>
+
+              {/* Consultation Quick Card */}
+              <div className="bg-gradient-to-br from-amber-50 to-stone-100 rounded-2xl p-4 border border-amber-200/80 shadow-xs space-y-2">
+                <span className="text-[10px] font-bold text-amber-900 uppercase font-mono tracking-wider flex items-center gap-1">
+                  <ShieldCheck size={12} className="text-amber-700" /> Need Formal Counsel?
+                </span>
+                <p className="text-xs text-stone-700 font-medium leading-snug">
+                  Get private legal representation, title searches, and contract reviews with Paystack Escrow.
+                </p>
+                <Link
+                  href="/search"
+                  className="inline-block mt-1 text-xs font-bold text-amber-900 hover:underline"
+                >
+                  Browse Verified Nigerian Lawyers →
+                </Link>
+              </div>
+            </aside>
+
+            {/* Center Column (6 cols): Stories, Composer, Questions Feed */}
+            <div className="col-span-12 lg:col-span-6 space-y-4">
+              {/* Facebook-style Stories / Legal Spotlights Rail */}
+              <div className="bg-white rounded-2xl p-3.5 border border-stone-200 shadow-xs overflow-x-auto">
+                <div className="flex items-center gap-3 min-w-max">
+                  {SPOTLIGHT_STORIES.map((story) => (
+                    <div
+                      key={story.id}
+                      onClick={() => alert(`Spotlight: ${story.title}. Explore related discussions in Legal Lounge.`)}
+                      className="flex flex-col items-center gap-1.5 w-20 cursor-pointer group"
+                    >
+                      <div className="relative">
+                        <div className="w-13 h-13 rounded-full p-0.5 bg-gradient-to-tr from-amber-500 via-amber-300 to-emerald-600 group-hover:scale-105 transition-transform shadow-2xs flex items-center justify-center">
+                          {story.avatar ? (
+                            <img
+                              src={story.avatar}
+                              alt=""
+                              className="w-full h-full rounded-full object-cover border-2 border-white"
+                            />
+                          ) : (
+                            <div className="w-full h-full rounded-full bg-stone-900 text-amber-400 font-bold flex items-center justify-center text-xs border-2 border-white">
+                              ⚖️
+                            </div>
+                          )}
+                        </div>
+                        {story.isLive && (
+                          <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-1.5 py-0.2 rounded-full bg-rose-600 text-white font-mono text-[8px] font-bold uppercase tracking-wider">
+                            LIVE
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] font-bold text-stone-700 group-hover:text-amber-900 text-center truncate w-full">
+                        {story.title}
+                      </span>
+                    </div>
                   ))}
                 </div>
+              </div>
 
-                <div className="relative shrink-0 w-full sm:w-56">
-                  <Search size={14} className="absolute left-3 top-3 text-stone-400" />
+              {/* Facebook-style "What's on your mind?" Composer Box */}
+              <div className="bg-white rounded-2xl p-4 border border-stone-200 shadow-xs space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-stone-900 text-amber-400 font-bold flex items-center justify-center text-sm shrink-0 font-serif shadow-2xs">
+                    {user?.avatar_url ? (
+                      <img
+                        src={user.avatar_url}
+                        alt=""
+                        className="w-full h-full rounded-full object-cover border border-stone-300"
+                      />
+                    ) : (
+                      user?.full_name?.charAt(0) || "U"
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAskModal(true)}
+                    className="flex-1 text-left px-4 py-2.5 rounded-full bg-stone-100 hover:bg-stone-200/80 text-stone-500 hover:text-stone-800 text-xs font-medium transition-colors cursor-pointer"
+                  >
+                    {user
+                      ? `What legal dilemma is on your mind, ${user.full_name?.split(" ")[0]}?`
+                      : "Ask a confidential question or legal inquiry..."}
+                  </button>
+                </div>
+
+                <div className="pt-2 border-t border-stone-100 flex items-center justify-around gap-2 text-xs font-bold text-stone-600">
+                  <button
+                    type="button"
+                    onClick={() => setShowAskModal(true)}
+                    className="flex-1 py-1.5 rounded-xl hover:bg-stone-100 flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-amber-900"
+                  >
+                    <MessageSquare size={15} className="text-amber-600" />
+                    <span>Ask Question</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("polls")}
+                    className="flex-1 py-1.5 rounded-xl hover:bg-stone-100 flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-indigo-900"
+                  >
+                    <Vote size={15} className="text-indigo-600" />
+                    <span>Dilemma Poll</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAnonymous(!isAnonymous)}
+                    className="flex-1 py-1.5 rounded-xl hover:bg-stone-100 flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-stone-700"
+                  >
+                    <EyeOff size={15} className={isAnonymous ? "text-amber-700" : "text-stone-400"} />
+                    <span>{isAnonymous ? "Anon: ON" : "Anon: OFF"}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Search & Filter Bar */}
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
                   <input
                     type="text"
-                    placeholder="Search discussions..."
+                    placeholder="Search discussions, CAMA clauses, tenancy..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-8 pr-3 py-2 rounded-xl bg-white border border-stone-200 text-xs text-stone-900 placeholder-stone-400 focus:outline-none focus:border-stone-400"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-white border border-stone-200 text-xs text-stone-900 placeholder-stone-400 focus:outline-none focus:border-stone-400 shadow-2xs"
                   />
                 </div>
+                {selectedCategory !== "All" && (
+                  <button
+                    onClick={() => setSelectedCategory("All")}
+                    className="px-3 py-2 rounded-xl bg-stone-200 text-stone-800 text-xs font-bold whitespace-nowrap hover:bg-stone-300 cursor-pointer"
+                  >
+                    Clear Filter ✕
+                  </button>
+                )}
               </div>
 
               {/* Questions Stream */}
@@ -406,7 +638,7 @@ export default function CommunityLoungePage() {
                   Loading community discussions...
                 </div>
               ) : filteredQuestions.length === 0 ? (
-                <div className="editorial-card rounded-2xl p-8 text-center bg-white border border-stone-200">
+                <div className="rounded-2xl p-8 text-center bg-white border border-stone-200 shadow-xs">
                   <p className="text-stone-600 text-sm">No discussions match your filter.</p>
                   <button
                     onClick={() => {
@@ -426,47 +658,58 @@ export default function CommunityLoungePage() {
                   return (
                     <article
                       key={q.id}
-                      className="editorial-card rounded-2xl bg-white border border-stone-200 overflow-hidden shadow-sm"
+                      className="rounded-2xl bg-white border border-stone-200 overflow-hidden shadow-xs hover:border-stone-300 transition-all"
                     >
-                      <div className="p-6">
-                        {/* Meta top bar */}
-                        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-mono font-bold uppercase tracking-wider text-stone-700 bg-stone-100 px-2 py-0.5 rounded">
-                              {q.category}
-                            </span>
-                            <span className="text-xs text-stone-400">•</span>
-                            <span className="text-xs font-medium text-stone-500">
-                              {q.is_anonymous ? (
-                                <span className="inline-flex items-center gap-1 text-stone-600">
-                                  <EyeOff size={12} /> {q.author_name}
+                      {/* Post Header: Facebook Style */}
+                      <div className="p-5 pb-3">
+                        <div className="flex items-center justify-between gap-3 mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-stone-900 text-amber-400 font-bold flex items-center justify-center text-sm font-serif shadow-2xs shrink-0">
+                              {q.is_anonymous ? "👤" : q.author_name?.charAt(0) || "U"}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h3 className="text-xs font-black text-stone-900 font-serif">
+                                  {q.author_name}
+                                </h3>
+                                {q.is_anonymous ? (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-stone-100 text-stone-600">
+                                    Anonymous
+                                  </span>
+                                ) : (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-emerald-100 text-emerald-800">
+                                    Verified
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5 text-[10px] text-stone-400 font-mono mt-0.5">
+                                <span>{q.created_at}</span>
+                                <span>•</span>
+                                <span className="text-amber-800 font-bold">{q.category}</span>
+                                <span>•</span>
+                                <span className="flex items-center gap-0.5">
+                                  <Globe size={10} /> Public
                                 </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 text-stone-800 font-semibold">
-                                  <User size={12} /> {q.author_name}
-                                </span>
-                              )}
-                            </span>
+                              </div>
+                            </div>
                           </div>
-
-                          <span className="text-xs text-stone-400 font-mono">{q.created_at}</span>
                         </div>
 
                         {/* Title & Body */}
-                        <h2 className="font-editorial text-xl sm:text-2xl font-bold text-stone-900 leading-snug">
+                        <h2 className="font-serif text-base sm:text-lg font-black text-stone-900 leading-snug">
                           {q.title}
                         </h2>
-                        <p className="text-sm text-stone-700 mt-2.5 leading-relaxed font-sans">
+                        <p className="text-xs sm:text-sm text-stone-700 mt-2 leading-relaxed font-sans">
                           {q.body}
                         </p>
 
                         {/* Tags */}
                         {q.tags && q.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5 mt-4">
+                          <div className="flex flex-wrap gap-1.5 mt-3">
                             {q.tags.map((tag) => (
                               <span
                                 key={tag}
-                                className="text-[11px] font-mono text-stone-600 bg-stone-100 px-2 py-0.5 rounded"
+                                className="text-[10px] font-mono font-bold text-stone-600 bg-stone-100 px-2 py-0.5 rounded-md"
                               >
                                 #{tag}
                               </span>
@@ -474,111 +717,127 @@ export default function CommunityLoungePage() {
                           </div>
                         )}
 
-                        {/* Social Reactions Bar */}
-                        <div className="mt-5 pt-4 border-t border-stone-100 flex flex-wrap items-center justify-between gap-3">
-                          <ReactionBadges
-                            questionId={q.id}
-                            initialReactions={reactions}
-                          />
-
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={(e) => handleUpvoteQuestion(q.id, e)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border border-stone-200 text-xs font-semibold text-stone-700 hover:bg-stone-100 transition-colors"
-                            >
-                              <ThumbsUp size={13} />
-                              <span className="font-mono">{q.upvotes || 0}</span>
-                            </button>
-
-                            <button
-                              onClick={() => setExpandedThreadId(isExpanded ? null : q.id)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-stone-900 text-white text-xs font-semibold transition-colors hover:bg-stone-800"
-                            >
-                              <MessageSquare size={13} />
-                              <span>{q.answers?.length || 0} Opinions</span>
-                              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                            </button>
+                        {/* Reaction counts summary */}
+                        <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between text-[11px] text-stone-500 font-medium">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-4 h-4 rounded-full bg-amber-500 text-white flex items-center justify-center text-[9px]">
+                              👍
+                            </span>
+                            <span className="font-mono font-bold text-stone-700">
+                              {q.upvotes || 0} Found Sound
+                            </span>
                           </div>
+                          <div className="flex items-center gap-3">
+                            <span>{q.answers?.length || 0} Counsel Opinions</span>
+                            <span>2 Shares</span>
+                          </div>
+                        </div>
+
+                        {/* Facebook 3-Button Interaction Bar */}
+                        <div className="mt-2 pt-2 border-t border-stone-100 flex items-center justify-around gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => handleUpvoteQuestion(q.id, e)}
+                            className="flex-1 py-1.5 rounded-xl hover:bg-stone-100 text-stone-700 hover:text-stone-900 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                          >
+                            <ThumbsUp size={15} />
+                            <span>Sound</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setExpandedThreadId(isExpanded ? null : q.id)}
+                            className={`flex-1 py-1.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                              isExpanded
+                                ? "bg-stone-200 text-stone-900"
+                                : "hover:bg-stone-100 text-stone-700 hover:text-stone-900"
+                            }`}
+                          >
+                            <MessageSquare size={15} />
+                            <span>Deliberate ({q.answers?.length || 0})</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (navigator.clipboard) {
+                                navigator.clipboard.writeText(window.location.href);
+                                alert("Deliberation link copied to clipboard!");
+                              }
+                            }}
+                            className="flex-1 py-1.5 rounded-xl hover:bg-stone-100 text-stone-700 hover:text-stone-900 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                          >
+                            <Share2 size={15} />
+                            <span>Share</span>
+                          </button>
                         </div>
                       </div>
 
-                      {/* Answers & Deliberations Section */}
+                      {/* Answers & Deliberations Section (Expandable Comments Stream) */}
                       {isExpanded && (
-                        <div className="bg-stone-50/80 p-6 border-t border-stone-200 space-y-5">
+                        <div className="bg-stone-50/70 p-5 border-t border-stone-200 space-y-4">
                           <div className="flex items-center justify-between">
-                            <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-stone-600 flex items-center gap-1.5">
+                            <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-stone-700 flex items-center gap-1.5">
                               <ShieldCheck size={14} className="text-emerald-700" />
                               <span>Verified Counsel Opinions ({q.answers?.length || 0})</span>
                             </h3>
                           </div>
 
                           {q.answers?.length === 0 ? (
-                            <div className="p-4 rounded-xl bg-white border border-stone-200 text-xs text-stone-500 italic">
+                            <div className="p-3.5 rounded-xl bg-white border border-stone-200 text-xs text-stone-500 italic">
                               No counsel opinions yet. Verified lawyers are currently reviewing this thread.
                             </div>
                           ) : (
                             q.answers.map((ans) => (
                               <div
                                 key={ans.id}
-                                className="p-5 rounded-2xl bg-white border border-stone-200/90 shadow-xs space-y-3"
+                                className="p-4 rounded-2xl bg-white border border-stone-200 shadow-2xs space-y-2.5"
                               >
-                                {/* Lawyer Header */}
-                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 pb-3">
-                                  <div className="flex items-center gap-2.5">
-                                    <div className="w-8 h-8 rounded-full bg-amber-100 border border-amber-300 text-amber-900 flex items-center justify-center font-bold text-xs shrink-0">
+                                <div className="flex items-center justify-between gap-2 border-b border-stone-100 pb-2">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-7 h-7 rounded-full bg-amber-100 border border-amber-300 text-amber-900 flex items-center justify-center font-bold text-xs shrink-0">
                                       {ans.lawyer_name?.charAt(0) || "L"}
                                     </div>
                                     <div>
                                       <div className="flex items-center gap-1.5">
-                                        <span className="font-bold text-xs sm:text-sm text-stone-900">
+                                        <span className="font-bold text-xs text-stone-900 font-serif">
                                           {ans.lawyer_name}
                                         </span>
-                                        {ans.is_san ? (
-                                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-900 font-bold uppercase">
-                                            SAN
-                                          </span>
-                                        ) : (
-                                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold uppercase">
-                                            NBA Verified
-                                          </span>
-                                        )}
+                                        <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-bold uppercase">
+                                          NBA Verified
+                                        </span>
                                       </div>
-                                      <p className="text-[11px] text-stone-500">
+                                      <p className="text-[10px] text-stone-400 font-mono">
                                         {ans.lawyer_title} • {ans.nba_branch}
                                       </p>
                                     </div>
                                   </div>
-
                                   <Link
                                     href="/search"
-                                    className="text-xs font-semibold text-emerald-800 hover:text-emerald-900 hover:underline inline-flex items-center gap-1"
+                                    className="text-[11px] font-bold text-emerald-800 hover:underline flex items-center gap-1"
                                   >
-                                    <span>Consult Counsel</span>
-                                    <ArrowRight size={12} />
+                                    <span>Consult</span>
+                                    <ArrowRight size={11} />
                                   </Link>
                                 </div>
 
-                                {/* Body */}
-                                <div className="text-xs sm:text-sm text-stone-800 leading-relaxed font-sans whitespace-pre-line">
+                                <div className="text-xs text-stone-800 leading-relaxed font-sans whitespace-pre-line">
                                   {ans.body}
                                 </div>
 
                                 {/* Peer Deliberations under Answer */}
                                 {ans.deliberations && ans.deliberations.length > 0 && (
-                                  <div className="mt-4 pt-3 border-t border-stone-100 space-y-2.5">
-                                    <div className="text-[11px] font-mono font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1">
+                                  <div className="mt-3 pt-2 border-t border-stone-100 space-y-2">
+                                    <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1">
                                       <Flame size={12} className="text-amber-700" />
-                                      <span>Peer Lawyer Deliberation & Nuance</span>
+                                      <span>Peer Lawyer Deliberation</span>
                                     </div>
-
                                     {ans.deliberations.map((delib) => (
                                       <div
                                         key={delib.id}
-                                        className="p-3 rounded-xl bg-amber-50/40 border border-amber-200/60 text-xs text-stone-700 leading-relaxed"
+                                        className="p-2.5 rounded-xl bg-amber-50/50 border border-amber-200/60 text-xs text-stone-700"
                                       >
-                                        <div className="flex items-center gap-2 font-semibold text-stone-900 mb-1">
+                                        <div className="flex items-center gap-2 font-semibold text-stone-900 mb-0.5 text-[11px]">
                                           <span>{delib.lawyer_name}</span>
-                                          <span className="text-[10px] text-stone-500 font-mono">
+                                          <span className="text-[9px] text-stone-400 font-mono">
                                             • {delib.created_at}
                                           </span>
                                         </div>
@@ -589,7 +848,7 @@ export default function CommunityLoungePage() {
                                 )}
 
                                 {/* Add Peer Deliberation Input */}
-                                <div className="mt-3 pt-2 flex gap-2">
+                                <div className="mt-2.5 pt-2 flex gap-2">
                                   <input
                                     type="text"
                                     value={deliberationInput[ans.id] || ""}
@@ -599,12 +858,12 @@ export default function CommunityLoungePage() {
                                         [ans.id]: e.target.value
                                       }))
                                     }
-                                    placeholder="Add peer legal deliberation or cite contrary case law..."
-                                    className="flex-1 px-3 py-1.5 rounded-lg bg-stone-50 border border-stone-200 text-xs text-stone-900 focus:outline-none focus:border-amber-400"
+                                    placeholder="Add peer legal deliberation..."
+                                    className="flex-1 px-3 py-1.5 rounded-xl bg-stone-50 border border-stone-200 text-xs text-stone-900 focus:outline-none focus:border-stone-400"
                                   />
                                   <button
                                     onClick={() => handleAddDeliberation(q.id, ans.id)}
-                                    className="px-3 py-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 text-white text-xs font-semibold shrink-0"
+                                    className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold shrink-0 cursor-pointer"
                                   >
                                     Reply
                                   </button>
@@ -620,40 +879,79 @@ export default function CommunityLoungePage() {
               )}
             </div>
 
-            {/* Sidebar Column: Daily Quick Take & Active Poll */}
-            <aside className="lg:col-span-4 space-y-6">
-              <DailyQuickTake quickTakes={communityData.quickTakes} />
+            {/* Right Column (3 cols): Active Lawyers Online, Trending Topics, Quick Take */}
+            <aside className="lg:col-span-3 hidden lg:block sticky top-20 space-y-4">
+              {/* Facebook-style "Contacts / Active Lawyers Online" */}
+              <div className="bg-white rounded-2xl p-4 border border-stone-200 shadow-xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black text-stone-900 font-serif flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    Lawyers Online ({communityData.onlineLawyersCount || 19})
+                  </h4>
+                  <Link href="/search" className="text-[10px] font-bold text-amber-900 hover:underline">
+                    View All
+                  </Link>
+                </div>
 
-              {communityData.polls?.[0] && (
-                <CommunityPoll
-                  initialPoll={communityData.polls[0]}
-                  onVoteSuccess={(updated) => {
-                    setCommunityData((prev) => ({
-                      ...prev,
-                      polls: prev.polls.map((p) => (p.id === updated.id ? updated : p))
-                    }));
-                  }}
-                />
-              )}
+                <div className="space-y-2.5">
+                  {ACTIVE_LAWYERS.map((lawyer) => (
+                    <div
+                      key={lawyer.id}
+                      className="flex items-center justify-between gap-2 p-1.5 rounded-xl hover:bg-stone-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="relative shrink-0">
+                          <img
+                            src={lawyer.avatar}
+                            alt=""
+                            className="w-8 h-8 rounded-full object-cover border border-stone-300"
+                          />
+                          <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-emerald-500 border border-white" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-stone-900 truncate font-serif">
+                            {lawyer.name}
+                          </p>
+                          <p className="text-[10px] text-stone-400 truncate font-mono">
+                            {lawyer.title}
+                          </p>
+                        </div>
+                      </div>
 
-              {/* Community Guidelines Card */}
-              <div className="editorial-card rounded-2xl p-6 bg-white border border-stone-200 shadow-sm text-xs text-stone-600 space-y-3">
-                <h4 className="font-editorial text-base font-bold text-stone-900">
-                  Lounge Etiquette
-                </h4>
-                <p>
-                  1. <strong>Anonymous by Default:</strong> Feel free to disclose situation specifics without revealing your employer, landlord, or identity.
-                </p>
-                <p>
-                  2. <strong>Opinions vs Retainers:</strong> Answers provided in the lounge constitute professional legal opinions and orientation, not formal retainers.
-                </p>
-                <p>
-                  3. <strong>Verified Counsel Only:</strong> Only NBA-verified practitioners can post top-level legal opinions.
-                </p>
-                <p>
-                  4. <strong>Chat Discussions Only:</strong> All deliberations take place via written text threads. Live audio and voice conversations are not enabled.
-                </p>
+                      <Link
+                        href={`/book/${lawyer.id}`}
+                        className="px-2 py-1 bg-stone-900 hover:bg-stone-800 text-white rounded-lg text-[10px] font-bold shrink-0 transition-colors"
+                      >
+                        Consult
+                      </Link>
+                    </div>
+                  ))}
+                </div>
               </div>
+
+              {/* Trending Topics in Nigeria */}
+              <div className="bg-white rounded-2xl p-4 border border-stone-200 shadow-xs space-y-2.5">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400 block">
+                  Trending Legal Topics
+                </span>
+                <div className="space-y-2 text-xs">
+                  <div className="cursor-pointer hover:text-amber-900">
+                    <p className="font-bold text-stone-800">#LekkiTenancyEdict</p>
+                    <p className="text-[10px] text-stone-400 font-mono">142 ongoing deliberations</p>
+                  </div>
+                  <div className="cursor-pointer hover:text-amber-900">
+                    <p className="font-bold text-stone-800">#CACAnnualReturns</p>
+                    <p className="text-[10px] text-stone-400 font-mono">98 inquiries</p>
+                  </div>
+                  <div className="cursor-pointer hover:text-amber-900">
+                    <p className="font-bold text-stone-800">#SupremeCourtLandVerdict</p>
+                    <p className="text-[10px] text-stone-400 font-mono">84 analyses</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Daily Quick Take Widget */}
+              <DailyQuickTake quickTakes={communityData.quickTakes} />
             </aside>
           </div>
         )}

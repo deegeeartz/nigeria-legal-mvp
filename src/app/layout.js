@@ -1,4 +1,4 @@
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Lora } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -9,6 +9,12 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+const lora = Lora({
+  variable: "--font-lora",
+  subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata = {
@@ -45,12 +51,13 @@ import { Navigation } from "@/components/Navigation";
 import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 import { PWABanner } from "@/components/pwa/PWABanner";
 import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
+import { FloatingChatDock } from "@/components/FloatingChatDock";
 
 export default function RootLayout({ children }) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${lora.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-slate-50 text-slate-900 pb-20 md:pb-0">
         <ServiceWorkerRegister />
@@ -61,6 +68,7 @@ export default function RootLayout({ children }) {
             <main className="flex-1 flex flex-col">
               {children}
             </main>
+            <FloatingChatDock />
             <OfflineIndicator />
           </RealTimeProvider>
         </AuthProvider>
