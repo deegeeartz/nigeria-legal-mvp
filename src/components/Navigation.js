@@ -97,10 +97,18 @@ export function Navigation() {
             <div className="flex items-center gap-3">
               <Link
                 href="/dashboard"
-                className="text-xs font-semibold text-stone-800 font-mono hover:text-stone-900 bg-stone-200/50 px-3 py-1.5 rounded-lg border border-stone-200 flex items-center gap-1.5"
+                className="text-xs font-semibold text-stone-800 font-mono hover:text-stone-900 bg-stone-200/50 px-2.5 py-1.5 rounded-lg border border-stone-200 flex items-center gap-2"
               >
-                <User size={13} />
-                <span>{user.full_name}</span>
+                {user.avatar_url ? (
+                  <img
+                    src={user.avatar_url}
+                    alt=""
+                    className="w-5 h-5 rounded-full object-cover border border-stone-300 shrink-0"
+                  />
+                ) : (
+                  <User size={13} />
+                )}
+                <span className="truncate max-w-[120px]">{user.full_name}</span>
                 <span className="text-[10px] uppercase font-bold text-amber-800">({user.role})</span>
               </Link>
               <button

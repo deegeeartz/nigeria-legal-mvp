@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { GoogleIcon } from "@/components/GoogleAuthButton";
 import { LawyerCaseManager } from "@/components/dashboard/LawyerCaseManager";
 import { ArticleEditorModal } from "@/components/articles/ArticleEditorModal";
+import { ProfilePictureModal } from "@/components/dashboard/ProfilePictureModal";
 import {
   Scale,
   ShieldCheck,
@@ -27,15 +28,29 @@ import {
   BookOpen,
   Share2,
   Heart,
-  Bookmark
+  Bookmark,
+  Camera,
+  CheckCircle2
 } from "lucide-react";
 
 export default function DashboardPage() {
-  const { user, logout, loading, setUser } = useAuth();
+  const { user, logout, loading, setUser, updateProfile } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("cases"); // "cases", "consultations", "publications"
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [avatarSuccessToast, setAvatarSuccessToast] = useState(false);
   const [lawyerArticles, setLawyerArticles] = useState([]);
+
+  const handleAvatarUpdated = async (newAvatarUrl) => {
+    if (updateProfile) {
+      await updateProfile({ avatar_url: newAvatarUrl });
+    } else if (setUser) {
+      setUser({ ...user, avatar_url: newAvatarUrl });
+    }
+    setAvatarSuccessToast(true);
+    setTimeout(() => setAvatarSuccessToast(false), 4000);
+  };
 
   useEffect(() => {
     if (!loading && !user) {
@@ -462,16 +477,46 @@ export default function DashboardPage() {
                   <h3 className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-4">
                     Verified Account Details
                   </h3>
-                  <div className="flex items-center gap-3.5 pb-4 border-b border-stone-100">
-                    <div className="w-12 h-12 rounded-full bg-stone-900 text-amber-400 font-bold text-lg flex items-center justify-center shrink-0">
-                      {user.full_name?.charAt(0) || "U"}
+                  <div className="flex items-center gap-4 pb-4 border-b border-stone-100">
+                    <div className="relative group shrink-0">
+                      <div className="w-14 h-14 rounded-full overflow-hidden bg-stone-900 border-2 border-stone-800 shadow-sm flex items-center justify-center">
+                        {user.avatar_url ? (
+                          <img
+                            src={user.avatar_url}
+                            alt={user.full_name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-amber-400 font-bold text-xl">
+                            {user.full_name?.charAt(0) || "U"}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsProfileModalOpen(true)}
+                        title="Update Profile Picture"
+                        className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-amber-600 text-white flex items-center justify-center shadow-md hover:bg-amber-700 transition-colors cursor-pointer"
+                      >
+                        <Camera size={12} />
+                      </button>
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-black text-stone-900 truncate font-serif">{user.full_name}</p>
                       <p className="text-xs text-stone-500 truncate">{user.email}</p>
-                      <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-mono font-extrabold uppercase bg-stone-100 text-stone-700">
-                        Role: {user.role}
-                      </span>
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-extrabold uppercase bg-stone-100 text-stone-700">
+                          Role: {user.role}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setIsProfileModalOpen(true)}
+                          className="text-[11px] font-bold text-amber-800 hover:text-amber-900 hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <Camera size={11} />
+                          Change Photo
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -525,6 +570,20 @@ export default function DashboardPage() {
           is_san: false
         }}
       />
+      {/* Profile Picture Modal */}
+      <ProfilePictureModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        currentUser={user}
+        onAvatarUpdated={handleAvatarUpdated}
+      />
+
+      {avatarSuccessToast && (
+        <div className="fixed bottom-6 right-6 z-50 p-4 rounded-2xl bg-stone-900 text-white shadow-2xl flex items-center gap-3 text-xs font-bold border border-stone-800">
+          <CheckCircle2 size={18} className="text-emerald-400" />
+          <span>Profile picture updated successfully!</span>
+        </div>
+      )}
     </div>
   );
 }

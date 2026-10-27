@@ -3,6 +3,7 @@
 export const SEED_LAWYERS = [
   {
     lawyer_id: "lw_001",
+    avatar_url: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=300&q=80",
     full_name: "Amaka Okonkwo",
     state: "Lagos",
     practice_areas: ["employment", "contracts"],
@@ -32,6 +33,7 @@ export const SEED_LAWYERS = [
   },
   {
     lawyer_id: "lw_002",
+    avatar_url: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80",
     full_name: "Ibrahim Yusuf SAN",
     state: "Abuja",
     practice_areas: ["property", "litigation"],
@@ -62,6 +64,7 @@ export const SEED_LAWYERS = [
   },
   {
     lawyer_id: "lw_003",
+    avatar_url: "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=300&q=80",
     full_name: "Chioma Eze",
     state: "Lagos",
     practice_areas: ["family", "property"],
@@ -91,6 +94,7 @@ export const SEED_LAWYERS = [
   },
   {
     lawyer_id: "lw_004",
+    avatar_url: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80",
     full_name: "Sadiq Bello",
     state: "Lagos",
     practice_areas: ["property", "land_dispute"],
@@ -114,6 +118,7 @@ export const SEED_LAWYERS = [
   },
   {
     lawyer_id: "lw_005",
+    avatar_url: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80",
     full_name: "Kemi Adegoke SAN",
     state: "Lagos",
     practice_areas: ["employment", "labour"],
@@ -136,7 +141,88 @@ export const SEED_LAWYERS = [
     tier: "Senior_Advocate",
     score: 98.0,
     badges: ["NBA Verified", "Senior Advocate", "Seal & Stamp Valid"],
-    why_recommended: [{ label: "Rating", value: "4.9 ★" }, { label: "Response", value: "< 2 hours" }]
+    why_recommended: [{ label: "Rating", value: "4.9 ★" },
+  {
+    lawyer_id: "lw_006",
+    avatar_url: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=300&q=80",
+    full_name: "Barr. Femi Adeyemi",
+    state: "Oyo",
+    practice_areas: ["corporate", "tax", "contracts"],
+    years_called: 9,
+    nin_verified: true,
+    nba_verified: true,
+    bvn_verified: true,
+    profile_completeness: 90,
+    completed_matters: 28,
+    rating: 4.7,
+    response_rate: 94,
+    avg_response_hours: 2.0,
+    repeat_client_rate: 35,
+    base_consult_fee_ngn: 35000,
+    price_ngn: 35000,
+    active_complaints: 0,
+    is_san: false,
+    court_admissions: ["state_high_court", "federal_high_court"],
+    legal_system: "common_law",
+    tier: "Verified_Counsel",
+    score: 91.0,
+    badges: ["NBA Verified", "Seal & Stamp Valid"],
+    why_recommended: [{ label: "Specialty", value: "Tax & Corporate" }, { label: "State", value: "Oyo / Ibadan" }]
+  },
+  {
+    lawyer_id: "lw_007",
+    avatar_url: "https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?auto=format&fit=crop&w=300&q=80",
+    full_name: "Barr. Tariere Briggs",
+    state: "Rivers",
+    practice_areas: ["property", "energy", "litigation"],
+    years_called: 12,
+    nin_verified: true,
+    nba_verified: true,
+    bvn_verified: true,
+    profile_completeness: 94,
+    completed_matters: 45,
+    rating: 4.8,
+    response_rate: 95,
+    avg_response_hours: 1.5,
+    repeat_client_rate: 40,
+    base_consult_fee_ngn: 55000,
+    price_ngn: 55000,
+    active_complaints: 0,
+    is_san: false,
+    court_admissions: ["federal_high_court", "court_of_appeal"],
+    legal_system: "common_law",
+    tier: "Top_Tier",
+    score: 93.5,
+    badges: ["NBA Verified", "Seal & Stamp Valid"],
+    why_recommended: [{ label: "Specialty", value: "Energy & Maritime" }, { label: "State", value: "Port Harcourt" }]
+  },
+  {
+    lawyer_id: "lw_008",
+    avatar_url: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=300&q=80",
+    full_name: "Aminu Kano",
+    state: "Kano",
+    practice_areas: ["commercial", "arbitration", "property"],
+    years_called: 10,
+    nin_verified: true,
+    nba_verified: true,
+    bvn_verified: true,
+    profile_completeness: 89,
+    completed_matters: 31,
+    rating: 4.6,
+    response_rate: 91,
+    avg_response_hours: 2.8,
+    repeat_client_rate: 29,
+    base_consult_fee_ngn: 40000,
+    price_ngn: 40000,
+    active_complaints: 0,
+    is_san: false,
+    court_admissions: ["state_high_court", "sharia"],
+    legal_system: "common_law",
+    tier: "Verified_Counsel",
+    score: 89.0,
+    badges: ["NBA Verified"],
+    why_recommended: [{ label: "Specialty", value: "Commercial Arbitration" }, { label: "State", value: "Kano" }]
+  }, { label: "Response", value: "< 2 hours" }]
   }
 ];
 
@@ -146,21 +232,24 @@ export const USERS = [
     email: "client@example.com",
     full_name: "Tunde Bakare",
     role: "client",
-    lawyer_id: null
+    lawyer_id: null,
+    avatar_url: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=300&q=80"
   },
   {
     user_id: 2,
     email: "amaka@example.com",
     full_name: "Amaka Okonkwo",
     role: "lawyer",
-    lawyer_id: "lw_001"
+    lawyer_id: "lw_001",
+    avatar_url: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=300&q=80"
   },
   {
     user_id: 3,
     email: "admin@example.com",
     full_name: "System Admin",
     role: "admin",
-    lawyer_id: null
+    lawyer_id: null,
+    avatar_url: ""
   }
 ];
 
@@ -435,5 +524,17 @@ globalThis.__MOCK_DB__ = globalThis.__MOCK_DB__ || {
     }
   ]
 };
+
+// Sync avatars and seeds with in-memory store
+if (globalThis.__MOCK_DB__ && Array.isArray(globalThis.__MOCK_DB__.lawyers)) {
+  SEED_LAWYERS.forEach((seedLw) => {
+    const existing = globalThis.__MOCK_DB__.lawyers.find((l) => l.lawyer_id === seedLw.lawyer_id);
+    if (existing) {
+      if (seedLw.avatar_url) existing.avatar_url = seedLw.avatar_url;
+    } else {
+      globalThis.__MOCK_DB__.lawyers.push(seedLw);
+    }
+  });
+}
 
 export const mockDb = globalThis.__MOCK_DB__;

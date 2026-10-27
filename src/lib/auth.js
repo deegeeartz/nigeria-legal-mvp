@@ -10,6 +10,7 @@ const AuthContext = createContext({
   login: async () => false,
   signup: async () => false,
   loginWithGoogle: async () => false,
+  updateProfile: async () => null,
   logout: async () => {},
   authFetch: async () => {},
 });
@@ -157,6 +158,32 @@ export function AuthProvider({ children }) {
     }
   }, [saveUserSession]);
 
+  const updateProfile = useCallback(async ({ avatar_url, full_name }) => {
+    setError(null);
+    try {
+      const res = await fetch(apiUrl("/api/auth/me"), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatar_url, full_name }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        saveUserSession(updated);
+        return updated;
+      }
+    } catch (e) {
+      console.warn("Server profile update note:", e);
+    }
+    // Fallback: update in-memory and local session immediately
+    const updated = {
+      ...user,
+      ...(avatar_url !== undefined && { avatar_url }),
+      ...(full_name !== undefined && { full_name }),
+    };
+    saveUserSession(updated);
+    return updated;
+  }, [user, saveUserSession]);
+
   const authFetch = useCallback(async (url, options = {}) => {
     const headers = new Headers(options.headers || {});
     if (user?.email) {
@@ -180,6 +207,7 @@ export function AuthProvider({ children }) {
         login,
         signup,
         loginWithGoogle,
+        updateProfile,
         logout,
         authFetch,
         setUser: saveUserSession,
